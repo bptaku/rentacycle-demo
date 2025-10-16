@@ -112,8 +112,9 @@ export default function RentacycleV63() {
     Object.fromEntries(BIKE_TYPES.map((t) => [t.id, 0])) as Record<BikeType, number>
   );
   const [addonsByType, setAddons] = useState<Record<BikeType, Partial<Record<string, number>>>>(
-    {} as Record<BikeType, Partial<Record<string, number>>>
-  );
+    () => ({} as Record<BikeType, Partial<Record<string, number>>>)
+  );  
+
   const weekday = getWeekday(date);
   const returnDate = calcReturnDate(date, plan, days);
   const returnWeekday = returnDate ? returnDate.getDay() : -1;
