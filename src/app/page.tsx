@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 
 // test redeploy
 
-export default function Page() {
 /* =========================================================
    定義
    ========================================================= */
