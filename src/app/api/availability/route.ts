@@ -1,8 +1,22 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export async function GET() {
-    return Response.json({ ok: true, route: "availability" }, { status: 200 });
+  try {
+    // Supabase から在庫データを取得
+    const { data, error } = await supabase.from("stock").select("*");
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return Response.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ ok: true, data }, { status: 200 });
+  } catch (e: any) {
+    console.error("Unexpected error:", e);
+    return Response.json({ ok: false, message: e.message || String(e) }, { status: 500 });
   }
+}
+
   
 type Plan = "3h" | "6h" | "1d" | "2d" | "multi";
 
