@@ -1,8 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
-
-// test redeploy
-// redeploy test 　
+import { useMemo, useState, useEffect } from "react";
 
 /* =========================================================
    定義
@@ -20,15 +17,6 @@ const BIKE_TYPES = [
   { id: "キッズ", label: "キッズ（12歳まで）" },
 ] as const;
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
-
-const INVENTORY: Record<BikeType, number> = {
-  "クロスバイク S": 5,
-  "クロスバイク M": 8,
-  "クロスバイク L": 5,
-  "電動A": 6,
-  "電動B": 4,
-  "キッズ": 6,
-};
 
 const PRICE = {
   クロス: { "3h": 1300, "6h": 2500, "1d": 3500, "2d": 6500, addDay: 2700, extra1h: 500 },
@@ -111,12 +99,59 @@ export default function RentacycleV63() {
   const [startTime, setStartTime] = useState("08:00");
   const [pickupTime, setPickupTime] = useState("08:00");
 
+  const [inventory, setInventory] = useState<Record<string, number>>({});
+  const [remaining, setRemaining] = useState<Record<string, number> | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const [qty, setQty] = useState<Record<BikeType, number>>(
     Object.fromEntries(BIKE_TYPES.map((t) => [t.id, 0])) as Record<BikeType, number>
   );
   const [addonsByType, setAddons] = useState<Record<BikeType, Partial<Record<string, number>>>>(
     () => ({} as Record<BikeType, Partial<Record<string, number>>>)
-  );  
+  );
+
+  // 初回ロードで在庫を取得
+  useEffect(() => {
+    async function fetchStock() {
+      try {
+        const res = await fetch("/api/availability");
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) {
+          const map: Record<string, number> = {};
+          json.data.forEach((r: { bike_type: string; total: number }) => {
+            map[r.bike_type] = r.total;
+          });
+          setInventory(map);
+        }
+      } catch (e) {
+        console.error("在庫取得エラー:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStock();
+  }, []);
+
+  // プラン・日付・時間が変わるたびに在庫を再計算
+  useEffect(() => {
+    async function check() {
+      if (!plan || !date) return;
+      const payload: any = { plan, start_date: date };
+      if (plan === "3h" || plan === "6h") payload.start_time = startTime;
+      if (plan === "multi") payload.days = days;
+
+      const res = await fetch("/api/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (json.ok) setRemaining(json.remaining);
+      else setRemaining(null);
+    }
+    check();
+  }, [plan, date, startTime, days]);
 
   const weekday = getWeekday(date);
   const returnDate = calcReturnDate(date, plan, days);
@@ -168,197 +203,59 @@ export default function RentacycleV63() {
     return { totalPrice: discounted, discountLabel: eligible ? "グループ割 10%OFF 適用" : "" };
   }, [plan, days, qty, addonsByType, adultCount]);
 
+  // 残り台数に応じて入力制御
   const setQtySafe = (type: BikeType, n: number) => {
-    const val = Math.max(0, Math.min(INVENTORY[type], n));
+    const cap = remaining?.[type] ?? inventory[type] ?? 0;
+    const val = Math.max(0, Math.min(cap, n));
     setQty((p) => ({ ...p, [type]: val }));
   };
-  const setAddonQty = (type: BikeType, id: string, n: number) => {
-    const max = qty[type] || 0;
-    const val = Math.max(0, Math.min(max, n));
-    setAddons((p) => ({ ...p, [type]: { ...(p[type] || {}), [id]: val } }));
-  };
 
-  const isBookingDisabled = isClosed || isReturnClosed || !plan || totalBikes === 0;
+  const noStock = remaining && Object.values(remaining).every((v) => v <= 0);
+  const isBookingDisabled = isClosed || isReturnClosed || !plan || totalBikes === 0 || noStock;
 
   /* =========================================================
      UI
      ========================================================= */
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">レンタサイクル予約（V6.3 定休日制御版）</h1>
+      <h1 className="text-2xl font-bold">レンタサイクル予約（Supabase在庫連動）</h1>
       <p className="text-gray-600 text-sm">
         営業時間：{OPEN_TIME}〜{CLOSE_TIME} ／ 定休日：水曜日
       </p>
 
-      {/* プラン */}
-      <section className="border rounded p-4">
-        <h2 className="font-semibold mb-2">① 貸出プラン</h2>
-        <div className="flex flex-wrap gap-3">
-          {["3h","6h","1d","2d","multi"].map((id) => (
-            <label key={id} className="flex items-center gap-2">
-              <input type="radio" name="plan" checked={plan === id} onChange={() => setPlan(id as any)} />
-              {{
-                "3h": "3時間",
-                "6h": "6時間",
-                "1d": "1日",
-                "2d": "1泊2日",
-                "multi": "2泊3日以上",
-              }[id]}
-            </label>
-          ))}
-        </div>
-      </section>
+      {loading && <p className="text-gray-500">在庫を読み込み中...</p>}
 
-      {/* 日時 */}
-      {plan && (
-        <section className="border rounded p-4">
-          <h2 className="font-semibold mb-2">② 日時を選択</h2>
-
-          {(plan === "3h" || plan === "6h") && (
-            <div className="space-y-3">
-              <label className="block text-sm mb-1">貸出日</label>
-              <input type="date" className="border rounded p-2" value={date} onChange={(e) => setDate(e.target.value)} />
-              {isClosed && <p className="text-red-600 text-sm">※水曜日は貸出できません</p>}
-              <label className="block text-sm mb-1">開始時間</label>
-              <select className="border rounded p-2" value={startTime} onChange={(e) => setStartTime(e.target.value)}>
-                {generateTimeSlots(plan).map((t) => <option key={t}>{t}</option>)}
-              </select>
-              <p className="text-sm text-gray-600">返却予定：{endTime}（18:30まで）</p>
-            </div>
-          )}
-
-          {(plan === "1d" || plan === "2d" || plan === "multi") && (
-            <div className="space-y-3">
-              <label className="block text-sm mb-1">貸出開始日</label>
-              <input type="date" className="border rounded p-2" value={date} onChange={(e) => setDate(e.target.value)} />
-              {isClosed && <p className="text-red-600 text-sm">※貸出日が水曜のため不可</p>}
-              {isReturnClosed && <p className="text-red-600 text-sm">※返却日が水曜のため不可</p>}
-              {plan === "multi" && (
-                <div className="flex items-center gap-2">
-                  <span>日数：</span>
-                  <input type="number" min={2} value={days} className="border rounded p-2 w-24" onChange={(e) => setDays(Number(e.target.value))} />
-                </div>
-              )}
-              <label className="block text-sm mb-1 mt-2">来店予定時間（目安）</label>
-              <select className="border rounded p-2" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)}>
-                {generateBusinessSlots().map((t) => <option key={t}>{t}</option>)}
-              </select>
-              {returnDate && (
-                <p className="text-sm text-gray-600">
-                  返却予定日：{returnDate.toLocaleDateString()}（{["日","月","火","水","木","金","土"][returnWeekday]}）
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 台数 */}
-      {plan && (
+      {plan && !loading && (
         <section className="border rounded p-4">
           <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
           {BIKE_TYPES.map(({ id, label }) => (
             <div key={id} className="flex items-center gap-3">
               <div className="w-60">{label}</div>
-              <div className="text-sm text-gray-600">残り{INVENTORY[id]}台</div>
+              <div className="text-sm text-gray-600">
+                残り{remaining?.[id] ?? inventory[id] ?? 0}台
+              </div>
               <input
                 type="number"
                 min={0}
-                max={INVENTORY[id]}
+                max={remaining?.[id] ?? inventory[id] ?? 0}
                 className="border rounded p-2 w-24"
                 value={qty[id]}
                 onChange={(e) => setQtySafe(id, Number(e.target.value))}
+                disabled={(remaining?.[id] ?? inventory[id] ?? 0) <= 0}
               />
             </div>
           ))}
         </section>
       )}
 
-      {/* オプション */}
-      {plan && totalBikes > 0 && (
-        <section className="border rounded p-4">
-          <h2 className="font-semibold mb-2">④ オプション</h2>
-          {BIKE_TYPES.map(({ id, label }) => {
-            const n = qty[id] || 0;
-            if (!n) return null;
-            return (
-              <div key={id} className="border rounded p-3 mb-2">
-                <div className="font-medium mb-1">{label}（{n}台）</div>
-                {ADDONS.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <label className="w-44">{a.name}（+¥{a.price}）</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={n}
-                      className="border rounded p-2 w-24"
-                      value={addonsByType[id]?.[a.id] ?? 0}
-                      onChange={(e) => setAddonQty(id, a.id, Number(e.target.value))}
-                    />
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </section>
-      )}
-
-      {/* 合計 */}
-      <section className="border rounded p-4">
-        <h2 className="font-semibold mb-2">⑤ 合計金額</h2>
-        <p className="text-2xl font-bold">¥{totalPrice.toLocaleString()}</p>
-        {discountLabel && <p className="text-green-700 text-sm mt-1">※ {discountLabel}</p>}
-        <button
-          disabled={isBookingDisabled}
-          className={`mt-3 w-full rounded px-4 py-2 text-white ${
-            isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
-          }`}
-          onClick={async () => {
-            // 返却日（Date → "YYYY-MM-DD"）
-            const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
-          
-            // 例として仮の氏名/メール（あとでフォーム項目を足しましょう）
-            const name = "テスト太郎";
-            const email = "test@example.com";
-          
-            const reservation = {
-              plan,
-              start_date: date, // "YYYY-MM-DD"
-              end_date,         // "YYYY-MM-DD" or null
-          
-              // 3h/6hのときだけ保存（それ以外はnull）
-              start_time: (plan === "3h" || plan === "6h") ? startTime : null,
-          
-              // 1日以上のときだけ保存（それ以外はnull）
-              pickup_time: (plan === "1d" || plan === "2d" || plan === "multi") ? pickupTime : null,
-          
-              bikes: qty,
-              addons: addonsByType,
-              total_price: totalPrice,
-          
-              // 仮の予約者情報（あとでフォーム化）
-              name: "テスト太郎",
-              email: "test@example.com",
-              paid: false,
-            };
-          
-            const res = await fetch("/api/reserve", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(reservation),
-            });
-          
-            const result = await res.json();
-            if (result.success) {
-              alert("予約を保存しました！（SupabaseにINSERT済み）");
-            } else {
-              alert("保存エラー: " + result.message);
-            }
-          }}         
-        >
-          予約内容を確認
-        </button>
-      </section>
+      <button
+        disabled={isBookingDisabled}
+        className={`mt-3 w-full rounded px-4 py-2 text-white ${
+          isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
+        }`}
+      >
+        予約内容を確認
+      </button>
     </div>
   );
 }
