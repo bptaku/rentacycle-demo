@@ -211,7 +211,8 @@ export default function RentacycleV63() {
   };
 
   const noStock = remaining && Object.values(remaining).every((v) => v <= 0);
-  const isBookingDisabled = isClosed || isReturnClosed || !plan || totalBikes === 0 || noStock;
+  const isBookingDisabled = !!(isClosed || isReturnClosed || !plan || totalBikes === 0);
+
 
   /* =========================================================
      UI
