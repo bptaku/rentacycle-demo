@@ -231,26 +231,28 @@ export default function RentacycleV63() {
       {loading && <p className="text-gray-500">在庫を読み込み中...</p>}
 
       {plan && !loading && (
-        <section className="border rounded p-4">
-          <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
-          {BIKE_TYPES.map(({ id, label }) => (
-            <div key={id} className="flex items-center gap-3">
-              <div className="w-60">{label}</div>
-              <div className="text-sm text-gray-600">
-                残り{remaining?.[id] ?? inventory[id] ?? 0}台
-              </div>
-              <input
-                type="number"
-                min={0}
-                max={remaining?.[id] ?? inventory[id] ?? 0}
-                className="border rounded p-2 w-24"
-                value={qty[id]}
-                onChange={(e) => setQtySafe(id, Number(e.target.value))}
-                disabled={(remaining?.[id] ?? inventory[id] ?? 0) <= 0}
-              />
+              {/* ③ 車種・サイズ・台数 */}
+      <section className="border rounded p-4">
+        <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
+        {BIKE_TYPES.map(({ id, label }) => (
+          <div key={id} className="flex items-center gap-3">
+            <div className="w-60">{label}</div>
+            <div className="text-sm text-gray-600">
+              残り{remaining?.[id] ?? inventory[id] ?? 0}台
             </div>
-          ))}
-        </section>
+            <input
+              type="number"
+              min={0}
+              max={remaining?.[id] ?? inventory[id] ?? 0}
+              className="border rounded p-2 w-24"
+              value={qty[id]}
+              onChange={(e) => setQtySafe(id, Number(e.target.value))}
+              disabled={(remaining?.[id] ?? inventory[id] ?? 0) <= 0}
+            />
+          </div>
+        ))}
+      </section>
+
       )}
 
       <button
