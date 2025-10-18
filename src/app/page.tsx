@@ -255,6 +255,7 @@ export default function RentacycleV63() {
           isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
         }`}
 
+
         予約内容を確認
       </button>
     </div>
