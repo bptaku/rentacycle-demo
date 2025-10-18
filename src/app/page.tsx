@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
+// redeploy test 2025-10-18
 
 /* =========================================================
    定義
