@@ -1,9 +1,5 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
-// redeploy test 2025-10-18
-
-// test redeploy 2025-10-18-b
-
 
 /* =========================================================
    定義
@@ -75,7 +71,6 @@ function getWeekday(date: string) {
   return d.getDay();
 }
 
-/** 返却日を計算 */
 function calcReturnDate(date: string, plan: string, days: number) {
   if (!date) return null;
   const d = new Date(date);
@@ -114,7 +109,7 @@ export default function RentacycleV63() {
     () => ({} as Record<BikeType, Partial<Record<string, number>>>)
   );
 
-  // 初回ロードで在庫を取得
+  /* === Supabase 在庫取得 === */
   useEffect(() => {
     async function fetchStock() {
       try {
@@ -136,7 +131,7 @@ export default function RentacycleV63() {
     fetchStock();
   }, []);
 
-  // プラン・日付・時間が変わるたびに在庫を再計算
+  /* === 在庫再チェック === */
   useEffect(() => {
     async function check() {
       if (!plan || !date) return;
@@ -207,28 +202,24 @@ export default function RentacycleV63() {
     return { totalPrice: discounted, discountLabel: eligible ? "グループ割 10%OFF 適用" : "" };
   }, [plan, days, qty, addonsByType, adultCount]);
 
-  // 残り台数に応じて入力制御
   const setQtySafe = (type: BikeType, n: number) => {
     const cap = remaining?.[type] ?? inventory[type] ?? 0;
     const val = Math.max(0, Math.min(cap, n));
     setQty((p) => ({ ...p, [type]: val }));
   };
 
-  const noStock = remaining && Object.values(remaining).every((v) => v <= 0);
-  const isBookingDisabled = !!(isClosed || isReturnClosed || !plan || totalBikes === 0);
-
+  const isBookingDisabled = isClosed || isReturnClosed || !plan || totalBikes === 0;
 
   /* =========================================================
      UI
      ========================================================= */
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">レンタサイクル予約（Supabase在庫連動）</h1>
+      <h1 className="text-2xl font-bold">レンタサイクル予約（Supabase在庫連動 完全版）</h1>
       <p className="text-gray-600 text-sm">
         営業時間：{OPEN_TIME}〜{CLOSE_TIME} ／ 定休日：水曜日
       </p>
 
-      {loading && <p className="text-gray-500">在庫を読み込み中...</p>}
       {/* ① 貸出プラン */}
       <section className="border rounded p-4">
         <h2 className="font-semibold mb-2">① 貸出プラン</h2>
@@ -317,8 +308,7 @@ export default function RentacycleV63() {
               </select>
               {returnDate && (
                 <p className="text-sm text-gray-600">
-                  返却予定日：
-                  {returnDate.toLocaleDateString()}（
+                  返却予定日：{returnDate.toLocaleDateString()}（
                   {["日", "月", "火", "水", "木", "金", "土"][returnWeekday]}）
                 </p>
               )}
@@ -328,35 +318,106 @@ export default function RentacycleV63() {
       )}
 
       {/* ③ 車種・サイズ・台数 */}
-      <section className="border rounded p-4">
-        <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
-        {BIKE_TYPES.map(({ id, label }) => (
-          <div key={id} className="flex items-center gap-3">
-            <div className="w-60">{label}</div>
-            <div className="text-sm text-gray-600">
-              残り{remaining?.[id] ?? inventory[id] ?? 0}台
+      {plan && !loading && (
+        <section className="border rounded p-4">
+          <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
+          {BIKE_TYPES.map(({ id, label }) => (
+            <div key={id} className="flex items-center gap-3">
+              <div className="w-60">{label}</div>
+              <div className="text-sm text-gray-600">
+                残り{remaining?.[id] ?? inventory[id] ?? 0}台
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={remaining?.[id] ?? inventory[id] ?? 0}
+                className="border rounded p-2 w-24"
+                value={qty[id]}
+                onChange={(e) => setQtySafe(id, Number(e.target.value))}
+                disabled={(remaining?.[id] ?? inventory[id] ?? 0) <= 0}
+              />
             </div>
-            <input
-              type="number"
-              min={0}
-              max={remaining?.[id] ?? inventory[id] ?? 0}
-              className="border rounded p-2 w-24"
-              value={qty[id]}
-              onChange={(e) => setQtySafe(id, Number(e.target.value))}
-              disabled={(remaining?.[id] ?? inventory[id] ?? 0) <= 0}
-            />
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
+      )}
 
-      <button
-        disabled={!!isBookingDisabled}
-        className={`mt-3 w-full rounded px-4 py-2 text-white ${
-          isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
-        }`}
-      >
-        予約内容を確認
-      </button>
+      {/* ④ オプション */}
+      {plan && totalBikes > 0 && (
+        <section className="border rounded p-4">
+          <h2 className="font-semibold mb-2">④ オプション</h2>
+          {BIKE_TYPES.map(({ id, label }) => {
+            const n = qty[id] || 0;
+            if (!n) return null;
+            return (
+              <div key={id} className="border rounded p-3 mb-2">
+                <div className="font-medium mb-1">{label}（{n}台）</div>
+                {ADDONS.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2">
+                    <label className="w-44">{a.name}（+¥{a.price}）</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={n}
+                      className="border rounded p-2 w-24"
+                      value={addonsByType[id]?.[a.id] ?? 0}
+                      onChange={(e) =>
+                        setAddons((p) => ({
+                          ...p,
+                          [id]: { ...(p[id] || {}), [a.id]: Number(e.target.value) },
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {/* ⑤ 合計金額 */}
+      <section className="border rounded p-4">
+        <h2 className="font-semibold mb-2">⑤ 合計金額</h2>
+        <p className="text-2xl font-bold">¥{totalPrice.toLocaleString()}</p>
+        {discountLabel && <p className="text-green-700 text-sm mt-1">※ {discountLabel}</p>}
+        <button
+          disabled={isBookingDisabled}
+          className={`mt-3 w-full rounded px-4 py-2 text-white ${
+            isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
+          }`}
+          onClick={async () => {
+            const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
+            const reservation = {
+              plan,
+              start_date: date,
+              end_date,
+              start_time: (plan === "3h" || plan === "6h") ? startTime : null,
+              pickup_time: (plan === "1d" || plan === "2d" || plan === "multi") ? pickupTime : null,
+              bikes: qty,
+              addons: addonsByType,
+              total_price: totalPrice,
+              name: "テスト太郎",
+              email: "test@example.com",
+              paid: false,
+            };
+
+            const res = await fetch("/api/reserve", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(reservation),
+            });
+
+            const result = await res.json();
+            if (result.success) {
+              alert("予約を保存しました！（SupabaseにINSERT済み）");
+            } else {
+              alert("保存エラー: " + result.message);
+            }
+          }}
+        >
+          予約内容を確認
+        </button>
+      </section>
     </div>
   );
 }
