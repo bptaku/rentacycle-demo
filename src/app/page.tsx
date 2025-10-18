@@ -12,9 +12,12 @@ const BIKE_TYPES = [
   { id: "クロスバイク S", label: "クロスバイク S（150〜165cm）" },
   { id: "クロスバイク M", label: "クロスバイク M（165〜175cm）" },
   { id: "クロスバイク L", label: "クロスバイク L（175〜185cm）" },
-  { id: "電動A", label: "電動A" },
-  { id: "電動B", label: "電動B（クロス型／チャイルドシート付）" },
-  { id: "キッズ", label: "キッズ（12歳まで）" },
+  { id: "電動A S", label: "電動A S（150〜165cm）" },
+  { id: "電動A M", label: "電動A M（165〜175cm）" },
+  { id: "電動A L", label: "電動A L（175〜185cm）" },
+  { id: "電動B", label: "電動B（チャイルドシート付）" },
+  { id: "キッズ130以下", label: "キッズ（130cm以下）" },
+  { id: "キッズ130以上", label: "キッズ（130cm以上）" },
 ] as const;
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
 
@@ -82,9 +85,9 @@ function calcReturnDate(date: string, plan: string, days: number) {
 
 function priceKeyOf(type: string) {
   if (type.startsWith("クロスバイク")) return "クロス";
-  if (type === "電動A") return "電動A";
+  if (type.startsWith("電動A")) return "電動A";
   if (type === "電動B") return "電動B";
-  if (type === "キッズ") return "キッズ";
+  if (type.startsWith("キッズ")) return "キッズ";
   return "クロス";
 }
 
