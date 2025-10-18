@@ -251,7 +251,6 @@ export default function RentacycleV63() {
           </div>
         ))}
       </section>
-      )}
 
       <button
         disabled={!!isBookingDisabled}
