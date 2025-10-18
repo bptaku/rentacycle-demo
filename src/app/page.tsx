@@ -229,6 +229,103 @@ export default function RentacycleV63() {
       </p>
 
       {loading && <p className="text-gray-500">在庫を読み込み中...</p>}
+      {/* ① 貸出プラン */}
+      <section className="border rounded p-4">
+        <h2 className="font-semibold mb-2">① 貸出プラン</h2>
+        <div className="flex flex-wrap gap-3">
+          {["3h", "6h", "1d", "2d", "multi"].map((id) => (
+            <label key={id} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="plan"
+                checked={plan === id}
+                onChange={() => setPlan(id as any)}
+              />
+              {{
+                "3h": "3時間",
+                "6h": "6時間",
+                "1d": "1日",
+                "2d": "1泊2日",
+                "multi": "2泊3日以上",
+              }[id]}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      {/* ② 日時を選択 */}
+      {plan && (
+        <section className="border rounded p-4">
+          <h2 className="font-semibold mb-2">② 日時を選択</h2>
+
+          {(plan === "3h" || plan === "6h") && (
+            <div className="space-y-3">
+              <label className="block text-sm mb-1">貸出日</label>
+              <input
+                type="date"
+                className="border rounded p-2"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+              {isClosed && <p className="text-red-600 text-sm">※水曜日は貸出できません</p>}
+              <label className="block text-sm mb-1">開始時間</label>
+              <select
+                className="border rounded p-2"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              >
+                {generateTimeSlots(plan).map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+              <p className="text-sm text-gray-600">返却予定：{endTime}（18:30まで）</p>
+            </div>
+          )}
+
+          {(plan === "1d" || plan === "2d" || plan === "multi") && (
+            <div className="space-y-3">
+              <label className="block text-sm mb-1">貸出開始日</label>
+              <input
+                type="date"
+                className="border rounded p-2"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+              {isClosed && <p className="text-red-600 text-sm">※貸出日が水曜のため不可</p>}
+              {isReturnClosed && <p className="text-red-600 text-sm">※返却日が水曜のため不可</p>}
+              {plan === "multi" && (
+                <div className="flex items-center gap-2">
+                  <span>日数：</span>
+                  <input
+                    type="number"
+                    min={2}
+                    value={days}
+                    className="border rounded p-2 w-24"
+                    onChange={(e) => setDays(Number(e.target.value))}
+                  />
+                </div>
+              )}
+              <label className="block text-sm mb-1 mt-2">来店予定時間（目安）</label>
+              <select
+                className="border rounded p-2"
+                value={pickupTime}
+                onChange={(e) => setPickupTime(e.target.value)}
+              >
+                {generateBusinessSlots().map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+              {returnDate && (
+                <p className="text-sm text-gray-600">
+                  返却予定日：
+                  {returnDate.toLocaleDateString()}（
+                  {["日", "月", "火", "水", "木", "金", "土"][returnWeekday]}）
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ③ 車種・サイズ・台数 */}
       <section className="border rounded p-4">
