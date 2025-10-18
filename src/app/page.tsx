@@ -261,10 +261,6 @@ export default function RentacycleV63() {
       >
         予約内容を確認
       </button>
-
-
-        予約内容を確認
-      </button>
     </div>
   );
 }
