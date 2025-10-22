@@ -73,26 +73,32 @@ export default function AvailabilityChecker({
       abortRef.current = controller;
 
       try {
-        const params = new URLSearchParams({
-          bike_type: bikeType || "",
-          start_date: startDate || "",
-          end_date: endDate || "",
-          request_qty: String(requestQty ?? 0),
-        });
-
-        const res = await fetch(`/api/check-availability?${params.toString()}`, {
-          method: "GET",
+        // ✅ POSTで送信（RPC対応）
+        const res = await fetch(`/api/check-availability`, {
+          method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bike_type: bikeType,
+            start_date: startDate,
+            end_date: endDate,
+            request_qty: requestQty,
+          }),
         });
 
         if (!res.ok) throw new Error(`在庫APIエラー: ${res.status}`);
-
-        const data: { available: boolean; remaining: number } = await res.json();
+        const data: { available?: boolean; remaining?: number | string | null } =
+          await res.json();
         if (!mountedRef.current) return;
 
-        setAvailable(data.available);
-        setRemaining(Number.isFinite(data.remaining) ? data.remaining : null);
+        // 🔽 残数を安全に数値化
+        const remainingNum =
+          typeof data.remaining === "number"
+            ? data.remaining
+            : Number(data.remaining) || null;
+
+        setAvailable(data.available ?? null);
+        setRemaining(remainingNum);
         setLoading(false);
       } catch (e: any) {
         if (e?.name === "AbortError") return;
@@ -105,35 +111,37 @@ export default function AvailabilityChecker({
     }, debounceMs);
   }, [isReady, bikeType, startDate, endDate, requestQty, debounceMs]);
 
-  // 表示
-        let content: React.ReactNode;
-        if (!isReady) {
-        content = (
-            <p className="text-sm text-gray-400 italic">
-            日付・車種・台数を選ぶと在庫を表示します
-            </p>
-        );
-        } else if (loading) {
-        content = <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>;
-        } else if (error) {
-        content = <p className="text-sm text-red-600">{error}</p>;
-        } else if (remaining === 0) {
-        content = <p className="text-sm font-semibold text-red-600">すべて貸出中</p>;
-        } else if (typeof remaining === "number" && remaining > 0) {
-        content = (
-            <p className="text-sm font-medium text-green-700">
-            残り{remaining}台
-            </p>
-        );
-        } else {
-        // 🔽 データなし（remaining=nullなど）の場合は予約不可を表示
-        content = (
-            <p className="text-sm font-semibold text-red-600">
-            予約不可
-            </p>
-        );
-        }
+  // ========= 表示ロジック =========
+  let content: React.ReactNode;
 
+  if (!isReady) {
+    content = (
+      <p className="text-sm text-gray-400 italic">
+        日付・車種・台数を選ぶと在庫を表示します
+      </p>
+    );
+  } else if (loading) {
+    content = (
+      <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>
+    );
+  } else if (error) {
+    content = <p className="text-sm text-red-600">{error}</p>;
+  } else if (remaining === 0) {
+    content = (
+      <p className="text-sm font-semibold text-red-600">すべて貸出中</p>
+    );
+  } else if (typeof remaining === "number" && remaining > 0) {
+    content = (
+      <p className="text-sm font-medium text-green-700">
+        残り{remaining}台
+      </p>
+    );
+  } else {
+    // 🔽 DB未登録など → 予約不可
+    content = (
+      <p className="text-sm font-semibold text-red-600">予約不可</p>
+    );
+  }
 
   return (
     <div className={`mt-2 text-center transition-all duration-200 ${className}`}>
