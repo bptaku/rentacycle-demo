@@ -73,22 +73,35 @@ export default function AvailabilityChecker({
       abortRef.current = controller;
 
       try {
+        // ✅ 送信データをまとめる
+        const payload = {
+          bike_type: bikeType,
+          start_date: startDate,
+          end_date: endDate,
+          request_qty: requestQty,
+        };
+
+        // 🟢 デバッグログを出力（Consoleで確認）
+        console.log("🔎 Fetch先URL:", "/api/check-availability");
+        console.log("🧾 Request payload:", payload);
+
         // ✅ POSTで送信（RPC対応）
         const res = await fetch(`/api/check-availability`, {
           method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bike_type: bikeType,
-            start_date: startDate,
-            end_date: endDate,
-            request_qty: requestQty,
-          }),
+          body: JSON.stringify(payload),
         });
 
+        console.log("📬 Response URL:", res.url, "status:", res.status);
+
         if (!res.ok) throw new Error(`在庫APIエラー: ${res.status}`);
+
         const data: { available?: boolean; remaining?: number | string | null } =
           await res.json();
+
+        console.log("📦 Response JSON:", data);
+
         if (!mountedRef.current) return;
 
         // 🔽 残数を安全に数値化
