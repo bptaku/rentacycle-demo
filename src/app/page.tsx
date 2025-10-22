@@ -389,34 +389,66 @@ export default function RentacycleV63() {
             isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
           }`}
           onClick={async () => {
-            const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
-            const reservation = {
-              plan,
-              start_date: date,
-              end_date,
-              start_time: (plan === "3h" || plan === "6h") ? startTime : null,
-              pickup_time: (plan === "1d" || plan === "2d" || plan === "multi") ? pickupTime : null,
-              bikes: qty,
-              addons: addonsByType,
-              total_price: totalPrice,
-              name: "テスト太郎",
-              email: "test@example.com",
-              paid: false,
-            };
+          const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
 
-            const res = await fetch("/api/reserve", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(reservation),
-            });
+          // 🧩 ステップ1：まず在庫チェックを走らせる
+          try {
+            for (const t of Object.keys(qty)) {
+              const q = qty[t as BikeType];
+              if (q > 0) {
+                const checkRes = await fetch("/api/check-availability", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    bike_type: t,
+                    start_date: date,
+                    days,
+                    quantity: q,
+                  }),
+                });
 
-            const result = await res.json();
-            if (result.success) {
-              alert("予約を保存しました！（SupabaseにINSERT済み）");
-            } else {
-              alert("保存エラー: " + result.message);
+                const check = await checkRes.json();
+                if (!check.ok || check.available === false) {
+                  alert(`${t} の在庫が足りません。別の日または台数を変更してください。`);
+                  return; // ⚠️ この時点で処理中断（予約送信しない）
+                }
+              }
             }
-          }}
+          } catch (err) {
+            console.error("在庫チェック中エラー:", err);
+            alert("在庫確認中にエラーが発生しました。");
+            return;
+          }
+
+          // 🧩 ステップ2：在庫OKだった場合のみ予約データ送信
+          const reservation = {
+            plan,
+            start_date: date,
+            end_date,
+            start_time: (plan === "3h" || plan === "6h") ? startTime : null,
+            pickup_time: (plan === "1d" || plan === "2d" || plan === "multi") ? pickupTime : null,
+            bikes: qty,
+            addons: addonsByType,
+            total_price: totalPrice,
+            name: "テスト太郎",
+            email: "test@example.com",
+            paid: false,
+          };
+
+          const res = await fetch("/api/reserve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(reservation),
+          });
+
+          const result = await res.json();
+          if (result.success) {
+            alert("✅ 予約を保存しました！（SupabaseにINSERT済み）");
+          } else {
+            alert("❌ 保存エラー: " + result.message);
+          }
+        }}
+
         >
           予約内容を確認
         </button>
