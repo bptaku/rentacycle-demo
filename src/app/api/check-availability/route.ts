@@ -15,12 +15,12 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
-    const { data: stockData } = await supabase
-      .from("stock")
-      .select("total")
-      .eq("bike_type", bike_type)
-      .gte("date", start_date)
-      .lte("date", end_date);
+    const { data, error } = await supabase.rpc("check_availability_with_period_v4_1", {
+      p_bike_type: bike_type,
+      p_start_date: start_date,
+      p_end_date: end_date,
+      p_request_qty: request_qty,
+    });
 
     const remaining = stockData?.length
       ? Math.min(...stockData.map((s) => s.total))
