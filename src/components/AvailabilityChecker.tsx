@@ -106,21 +106,34 @@ export default function AvailabilityChecker({
   }, [isReady, bikeType, startDate, endDate, requestQty, debounceMs]);
 
   // 表示
-  let content: React.ReactNode = null;
+        let content: React.ReactNode;
+        if (!isReady) {
+        content = (
+            <p className="text-sm text-gray-400 italic">
+            日付・車種・台数を選ぶと在庫を表示します
+            </p>
+        );
+        } else if (loading) {
+        content = <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>;
+        } else if (error) {
+        content = <p className="text-sm text-red-600">{error}</p>;
+        } else if (remaining === 0) {
+        content = <p className="text-sm font-semibold text-red-600">すべて貸出中</p>;
+        } else if (typeof remaining === "number" && remaining > 0) {
+        content = (
+            <p className="text-sm font-medium text-green-700">
+            残り{remaining}台
+            </p>
+        );
+        } else {
+        // 🔽 データなし（remaining=nullなど）の場合は予約不可を表示
+        content = (
+            <p className="text-sm font-semibold text-red-600">
+            予約不可
+            </p>
+        );
+        }
 
-  if (!isReady) {
-    content = <p className="text-sm text-gray-400 italic">日付・車種・台数を選ぶと在庫を表示します</p>;
-  } else if (loading) {
-    content = <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>;
-  } else if (error) {
-    content = <p className="text-sm text-red-600">在庫情報を取得できません：{error}</p>;
-  } else if (remaining === 0) {
-    content = <p className="text-sm font-semibold text-red-600">すべて貸出中</p>;
-  } else if (typeof remaining === "number" && remaining > 0) {
-    content = <p className="text-sm font-medium text-green-700">残り{remaining}台</p>;
-  } else {
-    content = <p className="text-sm text-gray-500">在庫情報を取得しました</p>;
-  }
 
   return (
     <div className={`mt-2 text-center transition-all duration-200 ${className}`}>
