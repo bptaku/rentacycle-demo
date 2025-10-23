@@ -1,10 +1,6 @@
-// components/AvailabilityChecker.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-
-console.log("🚀 Loaded AvailabilityChecker from:", import.meta.url);
-
 
 type Props = {
   bikeType: string | null;
@@ -40,7 +36,7 @@ export default function AvailabilityChecker({
   const mountedRef = useRef<boolean>(false);
 
   const isReady = useMemo(() => {
-    return Boolean(bikeType && startDate && endDate && requestQty > 0);
+    return Boolean(bikeType && startDate && endDate && requestQty >= 0);
   }, [bikeType, startDate, endDate, requestQty]);
 
   useEffect(() => {
@@ -76,38 +72,24 @@ export default function AvailabilityChecker({
       abortRef.current = controller;
 
       try {
-        // ✅ 送信データをまとめる
-        const payload = {
-          bike_type: bikeType,
-          start_date: startDate,
-          end_date: endDate,
-          request_qty: requestQty,
-        };
-
-        // 🟢 デバッグログを出力（Consoleで確認）
-        console.log("🔎 Fetch先URL:", "/api/check-availability");
-        console.log("🧾 Request payload:", payload);
-
-        // ✅ POSTで送信（RPC対応）
+        console.log("🔎 Fetch先URL: /api/check-availability");
         const res = await fetch(`/api/check-availability`, {
           method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            bike_type: bikeType,
+            start_date: startDate,
+            end_date: endDate,
+            request_qty: requestQty,
+          }),
         });
-
-        console.log("📬 Response URL:", res.url, "status:", res.status);
 
         if (!res.ok) throw new Error(`在庫APIエラー: ${res.status}`);
 
-        const data: { available?: boolean; remaining?: number | string | null } =
-          await res.json();
-
-        console.log("📦 Response JSON:", data);
-
+        const data: { available?: boolean; remaining?: number | null } = await res.json();
         if (!mountedRef.current) return;
 
-        // 🔽 残数を安全に数値化
         const remainingNum =
           typeof data.remaining === "number"
             ? data.remaining
@@ -127,7 +109,7 @@ export default function AvailabilityChecker({
     }, debounceMs);
   }, [isReady, bikeType, startDate, endDate, requestQty, debounceMs]);
 
-  // ========= 表示ロジック =========
+  /* ========= 表示ロジック ========= */
   let content: React.ReactNode;
 
   if (!isReady) {
@@ -137,30 +119,23 @@ export default function AvailabilityChecker({
       </p>
     );
   } else if (loading) {
-    content = (
-      <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>
-    );
+    content = <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>;
   } else if (error) {
     content = <p className="text-sm text-red-600">{error}</p>;
   } else if (remaining === 0) {
-    content = (
-      <p className="text-sm font-semibold text-red-600">すべて貸出中</p>
-    );
+    content = <p className="text-sm font-semibold text-red-600">すべて貸出中</p>;
   } else if (typeof remaining === "number" && remaining > 0) {
     content = (
-      <p className="text-sm font-medium text-green-700">
-        残り{remaining}台
-      </p>
+      <p className="text-sm font-medium text-green-700">残り{remaining}台</p>
     );
   } else {
-    // 🔽 DB未登録など → 予約不可
     content = (
       <p className="text-sm font-semibold text-red-600">予約不可</p>
     );
   }
 
   return (
-    <div className={`mt-2 text-center transition-all duration-200 ${className}`}>
+    <div className={`text-center transition-all duration-200 ${className}`}>
       {content}
     </div>
   );

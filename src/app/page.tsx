@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
+import AvailabilityChecker from "@/components/AvailabilityChecker";
 
 /* =========================================================
    定義
@@ -22,10 +23,10 @@ const BIKE_TYPES = [
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
 
 const PRICE = {
-  クロス: { "3h": 1300, "6h": 2500, "1d": 3500, "2d": 6500, addDay: 2700, extra1h: 500 },
-  電動A: { "3h": 2000, "6h": 3500, "1d": 4500, "2d": 8500, addDay: 3600, extra1h: 800 },
-  電動B: { "3h": 2800, "6h": 4500, "1d": 5500, "2d": 11000, addDay: 4500, extra1h: 1000 },
-  キッズ: { "3h": 500, "6h": 500, "1d": 500, "2d": 1000, addDay: 500, extra1h: 500 },
+  クロス: { "3h": 1300, "6h": 2500, "1d": 3500, "2d_plus": 6500, addDay: 2700 },
+  電動A: { "3h": 2000, "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
+  電動B: { "3h": 2800, "6h": 4500, "1d": 5500, "2d_plus": 11000, addDay: 4500 },
+  キッズ: { "3h": 500, "6h": 500, "1d": 500, "2d_plus": 1000, addDay: 500 },
 };
 
 const ADDONS = [
@@ -77,9 +78,8 @@ function getWeekday(date: string) {
 function calcReturnDate(date: string, plan: string, days: number) {
   if (!date) return null;
   const d = new Date(date);
-  if (plan === "3h" || plan === "6h") return d;
-  if (plan === "1d" || plan === "2d") d.setDate(d.getDate() + 1);
-  else if (plan === "multi") d.setDate(d.getDate() + (days - 1));
+  if (plan === "3h" || plan === "6h" || plan === "1d") d.setDate(d.getDate());
+  else if (plan === "2d_plus") d.setDate(d.getDate() + (days - 1));
   return d;
 }
 
@@ -95,7 +95,7 @@ function priceKeyOf(type: string) {
    メイン
    ========================================================= */
 export default function RentacycleV63() {
-  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d" | "multi" | "">("");
+  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d_plus" | "">("");
   const [days, setDays] = useState(2);
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("08:00");
@@ -140,7 +140,7 @@ export default function RentacycleV63() {
       if (!plan || !date) return;
       const payload: any = { plan, start_date: date };
       if (plan === "3h" || plan === "6h") payload.start_time = startTime;
-      if (plan === "multi") payload.days = days;
+      if (plan === "2d_plus") payload.days = days;
 
       const res = await fetch("/api/availability", {
         method: "POST",
@@ -186,12 +186,14 @@ export default function RentacycleV63() {
       const key = priceKeyOf(t);
       const table = PRICE[key];
       let price = 0;
-      if (plan === "3h" || plan === "6h" || plan === "1d" || plan === "2d") price = table[plan];
-      else if (plan === "multi") {
-        if (days === 1) price = table["1d"];
-        else if (days === 2) price = table["2d"];
-        else price = table["2d"] + table["addDay"] * (days - 2);
+
+      // ✅ v4.3 新料金体系
+      if (plan === "3h" || plan === "6h" || plan === "1d" || plan === "2d_plus") {
+        price = table[plan];
+      } else if (days > 2) {
+        price = table["2d_plus"] + table["addDay"] * (days - 2);
       }
+
       subtotal += price * n;
     }
 
@@ -200,7 +202,7 @@ export default function RentacycleV63() {
       for (const a of ADDONS) addons += a.price * (addonsByType[t]?.[a.id] ?? 0);
     }
 
-    const eligible = adultCount >= 3 && (plan === "1d" || plan === "2d" || plan === "multi");
+    const eligible = adultCount >= 3 && (plan === "1d" || plan === "2d_plus");
     const discounted = eligible ? Math.floor((subtotal + addons) * 0.9) : subtotal + addons;
     return { totalPrice: discounted, discountLabel: eligible ? "グループ割 10%OFF 適用" : "" };
   }, [plan, days, qty, addonsByType, adultCount]);
@@ -227,7 +229,7 @@ export default function RentacycleV63() {
       <section className="border rounded p-4">
         <h2 className="font-semibold mb-2">① 貸出プラン</h2>
         <div className="flex flex-wrap gap-3">
-          {["3h", "6h", "1d", "2d", "multi"].map((id) => (
+          {["3h", "6h", "1d", "2d_plus"].map((id) => (
             <label key={id} className="flex items-center gap-2">
               <input
                 type="radio"
@@ -236,11 +238,10 @@ export default function RentacycleV63() {
                 onChange={() => setPlan(id as any)}
               />
               {{
-                "3h": "3時間",
-                "6h": "6時間",
-                "1d": "1日",
-                "2d": "1泊2日",
-                "multi": "2泊3日以上",
+                "3h": "3時間プラン（短時間利用）",
+                "6h": "6時間プラン（半日利用）",
+                "1d": "1日プラン（当日返却）",
+                "2d_plus": "1泊2日以上プラン（宿泊・連泊対応）",
               }[id]}
             </label>
           ))}
@@ -276,7 +277,7 @@ export default function RentacycleV63() {
             </div>
           )}
 
-          {(plan === "1d" || plan === "2d" || plan === "multi") && (
+          {(plan === "1d" || plan === "2d_plus") && (
             <div className="space-y-3">
               <label className="block text-sm mb-1">貸出開始日</label>
               <input
@@ -287,7 +288,7 @@ export default function RentacycleV63() {
               />
               {isClosed && <p className="text-red-600 text-sm">※貸出日が水曜のため不可</p>}
               {isReturnClosed && <p className="text-red-600 text-sm">※返却日が水曜のため不可</p>}
-              {plan === "multi" && (
+              {plan === "2d_plus" && (
                 <div className="flex items-center gap-2">
                   <span>日数：</span>
                   <input
@@ -321,15 +322,21 @@ export default function RentacycleV63() {
       )}
 
       {/* ③ 車種・サイズ・台数 */}
-      {plan && !loading && (
+      {!loading && plan && (
         <section className="border rounded p-4">
           <h2 className="font-semibold mb-2">③ 車種・サイズ・台数</h2>
           {BIKE_TYPES.map(({ id, label }) => (
-            <div key={id} className="flex items-center gap-3">
+            <div key={id} className="flex flex-col sm:flex-row sm:items-center sm:gap-3 border-b py-2">
               <div className="w-60">{label}</div>
-              <div className="text-sm text-gray-600">
-                残り{remaining?.[id] ?? inventory[id] ?? 0}台
-              </div>
+              <AvailabilityChecker
+                bikeType={id}
+                startDate={date}
+                endDate={returnDate ? returnDate.toISOString().split("T")[0] : null}
+                requestQty={qty[id] || 0}
+                onStatusChange={(status) =>
+                  setRemaining((prev) => ({ ...(prev || {}), [id]: status.remaining ?? 0 }))
+                }
+              />
               <input
                 type="number"
                 min={0}
@@ -426,7 +433,7 @@ export default function RentacycleV63() {
             start_date: date,
             end_date,
             start_time: (plan === "3h" || plan === "6h") ? startTime : null,
-            pickup_time: (plan === "1d" || plan === "2d" || plan === "multi") ? pickupTime : null,
+            pickup_time: (plan === "1d" || plan === "2d_plus" || plan === "2d_plus") ? pickupTime : null,
             bikes: qty,
             addons: addonsByType,
             total_price: totalPrice,

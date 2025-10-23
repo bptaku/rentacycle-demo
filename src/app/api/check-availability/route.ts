@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   const { bike_type, start_date, end_date, request_qty } = await req.json();
 
   // ★ 返却日を含むRPC
-  const { data, error } = await supabase.rpc("check_availability_with_period_v4_1", {
+  const { data, error } = await supabase.rpc("check_availability_with_period_v4_1b", {
     p_bike_type: bike_type,
     p_start_date: start_date,
     p_end_date: end_date,
