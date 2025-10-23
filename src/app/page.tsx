@@ -95,7 +95,7 @@ function priceKeyOf(type: string) {
    メイン
    ========================================================= */
 export default function RentacycleV63() {
-  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d_plus">("");
+  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d_plus" | "" >("");
   const [days, setDays] = useState(2);
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("08:00");
