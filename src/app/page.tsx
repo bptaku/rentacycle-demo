@@ -95,7 +95,7 @@ function priceKeyOf(type: string) {
    メイン
    ========================================================= */
 export default function RentacycleV63() {
-  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d_plus" | "">("");
+  const [plan, setPlan] = useState<"3h" | "6h" | "1d" | "2d_plus">("");
   const [days, setDays] = useState(2);
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("08:00");
@@ -433,7 +433,7 @@ export default function RentacycleV63() {
             start_date: date,
             end_date,
             start_time: (plan === "3h" || plan === "6h") ? startTime : null,
-            pickup_time: (plan === "1d" || plan === "2d_plus" || plan === "2d_plus") ? pickupTime : null,
+            pickup_time: (plan === "1d" || plan === "2d_plus") ? pickupTime : null,
             bikes: qty,
             addons: addonsByType,
             total_price: totalPrice,
