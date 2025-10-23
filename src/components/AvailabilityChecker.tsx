@@ -1,6 +1,9 @@
 // components/AvailabilityChecker.tsx
 "use client";
 
+console.log("💡 props:", { bikeType, startDate, endDate, requestQty });
+console.log("💡 isReady:", isReady);
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
