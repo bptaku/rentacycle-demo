@@ -108,9 +108,9 @@ export default function RentacycleV63() {
   const [qty, setQty] = useState<Record<BikeType, number>>(
     Object.fromEntries(BIKE_TYPES.map((t) => [t.id, 0])) as Record<BikeType, number>
   );
-  const [addonsByType, setAddons] = useState<Record<BikeType, Partial<Record<string, number>>>>(
-    () => ({} as Record<BikeType, Partial<Record<string, number>>>)
-  );
+// v4.4新構造：車種 × 台番号 × オプション
+type AddonsByBike = Record<BikeType, Array<Partial<Record<string, number>>>>;
+const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
 
   /* === Supabase 在庫取得 === */
   useEffect(() => {
@@ -155,6 +155,24 @@ export default function RentacycleV63() {
     check();
   }, [plan, date, startTime, days]);
 
+    useEffect(() => {
+      const updated: AddonsByBike = { ...addonsByBike };
+      for (const type of BIKE_TYPES.map((t) => t.id)) {
+        const n = qty[type] || 0;
+        const current = updated[type] || [];
+        if (current.length < n) {
+          for (let i = current.length; i < n; i++) {
+            current.push({});
+          }
+        }
+        if (current.length > n) {
+          current.length = n;
+        }
+        updated[type] = current;
+      }
+      setAddonsByBike(updated);
+    }, [qty]);
+
   const weekday = getWeekday(date);
   const returnDate = calcReturnDate(date, plan, days);
   const returnWeekday = returnDate ? returnDate.getDay() : -1;
@@ -177,35 +195,44 @@ export default function RentacycleV63() {
   );
   const totalBikes = useMemo(() => Object.values(qty).reduce((a, b) => a + (b || 0), 0), [qty]);
 
-  const { totalPrice, discountLabel } = useMemo(() => {
-    if (!plan) return { totalPrice: 0, discountLabel: "" };
-    let subtotal = 0;
-    for (const t of BIKE_TYPES.map((x) => x.id)) {
-      const n = qty[t] || 0;
-      if (!n) continue;
-      const key = priceKeyOf(t);
-      const table = PRICE[key];
-      let price = 0;
+    const { subtotal, addons, totalPrice, discountLabel } = useMemo(() => {
+      if (!plan) return { subtotal: 0, addons: 0, totalPrice: 0, discountLabel: "" };
 
-      // ✅ v4.3 新料金体系
-      if (plan === "3h" || plan === "6h" || plan === "1d" || plan === "2d_plus") {
-        price = table[plan];
-      } else if (days > 2) {
-        price = table["2d_plus"] + table["addDay"] * (days - 2);
+      // 🧮 基本料金
+      let subtotal = 0;
+      for (const t of BIKE_TYPES.map((x) => x.id)) {
+        const n = qty[t] || 0;
+        if (!n) continue;
+        const key = priceKeyOf(t);
+        const table = PRICE[key];
+        let price = 0;
+        if (plan === "3h" || plan === "6h" || plan === "1d" || plan === "2d_plus") price = table[plan];
+        else if (days > 2) price = table["2d_plus"] + table["addDay"] * (days - 2);
+        subtotal += price * n;
       }
 
-      subtotal += price * n;
-    }
+      // 🧩 オプション料金（1台ずつ集計）
+      let addons = 0;
+      for (const t of BIKE_TYPES.map((x) => x.id)) {
+        const perType = addonsByBike[t] || [];
+        for (const perBike of perType) {
+          for (const a of ADDONS) {
+            addons += a.price * (perBike[a.id] ?? 0);
+          }
+        }
+      }
 
-    let addons = 0;
-    for (const t of BIKE_TYPES.map((x) => x.id)) {
-      for (const a of ADDONS) addons += a.price * (addonsByType[t]?.[a.id] ?? 0);
-    }
+      // 🎁 グループ割（3台以上）
+      const eligible = adultCount >= 3 && (plan === "1d" || plan === "2d_plus");
+      const discounted = eligible ? Math.floor((subtotal + addons) * 0.9) : subtotal + addons;
 
-    const eligible = adultCount >= 3 && (plan === "1d" || plan === "2d_plus");
-    const discounted = eligible ? Math.floor((subtotal + addons) * 0.9) : subtotal + addons;
-    return { totalPrice: discounted, discountLabel: eligible ? "グループ割 10%OFF 適用" : "" };
-  }, [plan, days, qty, addonsByType, adultCount]);
+      return {
+        subtotal,
+        addons,
+        totalPrice: discounted,
+        discountLabel: eligible ? "グループ割 10%OFF 適用" : "",
+      };
+    }, [plan, days, qty, addonsByBike, adultCount]);
 
   const setQtySafe = (type: BikeType, n: number) => {
     const cap = remaining?.[type] ?? inventory[type] ?? 0;
@@ -355,28 +382,47 @@ export default function RentacycleV63() {
       {plan && totalBikes > 0 && (
         <section className="border rounded p-4">
           <h2 className="font-semibold mb-2">④ オプション</h2>
+
           {BIKE_TYPES.map(({ id, label }) => {
-            const n = qty[id] || 0;
-            if (!n) return null;
+            const count = qty[id] || 0;
+            if (!count) return null;
+
+            const perType = addonsByBike[id] || [];
+
             return (
-              <div key={id} className="border rounded p-3 mb-2">
-                <div className="font-medium mb-1">{label}（{n}台）</div>
-                {ADDONS.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <label className="w-44">{a.name}（+¥{a.price}）</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={n}
-                      className="border rounded p-2 w-24"
-                      value={addonsByType[id]?.[a.id] ?? 0}
-                      onChange={(e) =>
-                        setAddons((p) => ({
-                          ...p,
-                          [id]: { ...(p[id] || {}), [a.id]: Number(e.target.value) },
-                        }))
-                      }
-                    />
+              <div key={id} className="border rounded p-3 mb-4 bg-gray-50">
+                <h3 className="font-medium mb-2">{label}</h3>
+
+                {Array.from({ length: count }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="border rounded p-2 mb-2 bg-white shadow-sm"
+                  >
+                    <p className="font-semibold text-sm mb-1">
+                      {label} #{i + 1}
+                    </p>
+
+                    {ADDONS.map((a) => (
+                      <div key={a.id} className="flex items-center gap-2 ml-2">
+                        <label className="w-44 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mr-1"
+                            checked={Boolean(perType[i]?.[a.id])}
+                            onChange={(e) => {
+                              const updated = { ...perType[i], [a.id]: e.target.checked ? 1 : 0 };
+                              const newList = [...perType];
+                              newList[i] = updated;
+                              setAddonsByBike((p) => ({
+                                ...p,
+                                [id]: newList,
+                              }));
+                            }}
+                          />
+                          {a.name}（+¥{a.price}）
+                        </label>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -385,81 +431,96 @@ export default function RentacycleV63() {
         </section>
       )}
 
-      {/* ⑤ 合計金額 */}
-      <section className="border rounded p-4">
-        <h2 className="font-semibold mb-2">⑤ 合計金額</h2>
-        <p className="text-2xl font-bold">¥{totalPrice.toLocaleString()}</p>
-        {discountLabel && <p className="text-green-700 text-sm mt-1">※ {discountLabel}</p>}
-        <button
-          disabled={isBookingDisabled}
-          className={`mt-3 w-full rounded px-4 py-2 text-white ${
-            isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
-          }`}
-          onClick={async () => {
-          const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
+{/* ⑤ 合計金額 */}
+<section className="border rounded p-4">
+  <h2 className="font-semibold mb-2">⑤ 合計金額</h2>
 
-          // 🧩 ステップ1：まず在庫チェックを走らせる
-          try {
-            for (const t of Object.keys(qty)) {
-              const q = qty[t as BikeType];
-              if (q > 0) {
-                const checkRes = await fetch("/api/check-availability", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    bike_type: t,
-                    start_date: date,
-                    days,
-                    quantity: q,
-                  }),
-                });
+  {/* 🧾 内訳セクション */}
+  <section className="border rounded p-4 bg-gray-50 mb-4">
+    <h3 className="font-semibold mb-2 text-gray-800">料金内訳</h3>
+    <ul className="text-sm space-y-1">
+      <li>基本料金：¥{subtotal.toLocaleString()}</li>
+      <li>オプション料金：¥{addons.toLocaleString()}</li>
+      {discountLabel && (
+        <li className="text-green-700 font-medium">{discountLabel}</li>
+      )}
+    </ul>
+    <hr className="my-2" />
+    <p className="text-xl font-bold text-gray-900">
+      合計：¥{totalPrice.toLocaleString()}
+    </p>
+  </section>
 
-                const check = await checkRes.json();
-                if (!check.ok || check.available === false) {
-                  alert(`${t} の在庫が足りません。別の日または台数を変更してください。`);
-                  return; // ⚠️ この時点で処理中断（予約送信しない）
-                }
-              }
+  {/* 🧩 予約ボタン */}
+  <button
+    disabled={isBookingDisabled}
+    className={`mt-3 w-full rounded px-4 py-2 text-white ${
+      isBookingDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
+    }`}
+    onClick={async () => {
+      const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
+
+      // 🧩 ステップ1：まず在庫チェックを走らせる
+      try {
+        for (const t of Object.keys(qty)) {
+          const q = qty[t as BikeType];
+          if (q > 0) {
+            const checkRes = await fetch("/api/check-availability", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                bike_type: t,
+                start_date: date,
+                days,
+                quantity: q,
+              }),
+            });
+
+            const check = await checkRes.json();
+            if (!check.ok || check.available === false) {
+              alert(`${t} の在庫が足りません。別の日または台数を変更してください。`);
+              return; // ⚠️ この時点で処理中断（予約送信しない）
             }
-          } catch (err) {
-            console.error("在庫チェック中エラー:", err);
-            alert("在庫確認中にエラーが発生しました。");
-            return;
           }
+        }
+      } catch (err) {
+        console.error("在庫チェック中エラー:", err);
+        alert("在庫確認中にエラーが発生しました。");
+        return;
+      }
 
-          // 🧩 ステップ2：在庫OKだった場合のみ予約データ送信
-          const reservation = {
-            plan,
-            start_date: date,
-            end_date,
-            start_time: (plan === "3h" || plan === "6h") ? startTime : null,
-            pickup_time: (plan === "1d" || plan === "2d_plus") ? pickupTime : null,
-            bikes: qty,
-            addons: addonsByType,
-            total_price: totalPrice,
-            name: "テスト太郎",
-            email: "test@example.com",
-            paid: false,
-          };
+      // 🧩 ステップ2：在庫OKだった場合のみ予約データ送信
+      const reservation = {
+        plan,
+        start_date: date,
+        end_date,
+        start_time: (plan === "3h" || plan === "6h") ? startTime : null,
+        pickup_time: (plan === "1d" || plan === "2d_plus") ? pickupTime : null,
+        bikes: qty,
+        addons: addonsByBike,
+        total_price: totalPrice,
+        name: "テスト太郎",
+        email: "test@example.com",
+        paid: false,
+      };
 
-          const res = await fetch("/api/reserve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(reservation),
-          });
+      const res = await fetch("/api/reserve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reservation),
+      });
 
-          const result = await res.json();
-          if (result.success) {
-            alert("✅ 予約を保存しました！（SupabaseにINSERT済み）");
-          } else {
-            alert("❌ 保存エラー: " + result.message);
-          }
-        }}
-
-        >
-          予約内容を確認
-        </button>
-      </section>
+      const result = await res.json();
+      if (result.success) {
+        alert("✅ 予約を保存しました！（SupabaseにINSERT済み）");
+      } else {
+        alert("❌ 保存エラー: " + result.message);
+      }
+    }}
+  >
+    予約内容を確認
+  </button>
+</section>
     </div>
   );
 }
