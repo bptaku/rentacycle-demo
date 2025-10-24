@@ -109,8 +109,9 @@ export default function RentacycleV63() {
     Object.fromEntries(BIKE_TYPES.map((t) => [t.id, 0])) as Record<BikeType, number>
   );
 // v4.4新構造：車種 × 台番号 × オプション
-type AddonsByBike = Record<BikeType, Array<Partial<Record<string, number>>>>;
+type AddonsByBike = Partial<Record<BikeType, Array<Partial<Record<string, number>>>>>;
 const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
+
 
   /* === Supabase 在庫取得 === */
   useEffect(() => {
