@@ -1,3 +1,4 @@
+// src/app/api/reserve/route.ts
 import { createClient } from "@/utils/supabase/server";
 
 interface NormalizedAddon {
@@ -24,6 +25,56 @@ export async function POST(req: Request) {
       start_date,
       end_date,
     } = body;
+
+    // 🧩 デバッグログ（受信内容確認）
+    console.log("📦 RESERVE payload =", body);
+
+    const dbgBikeType = Object.keys(bikes ?? {})[0] ?? "(none)";
+    const request_qty = bikes?.[dbgBikeType] ?? 0;
+
+    console.log("🔍 RESERVE derived:", {
+      bike_type: dbgBikeType,
+      start_date,
+      end_date,
+      request_qty,
+      plan,
+    });
+
+    // 🧩 RPC在庫チェック（明示引数名で統一）
+    const { data: available, error: rpcError } = await supabase.rpc(
+      "check_availability_with_period_v4_2",
+      {
+        p_bike_type: dbgBikeType,
+        p_start_date: start_date,
+        p_end_date: end_date,
+        p_request_qty: request_qty,
+        p_plan: plan || "standard",
+      }
+    );
+
+    console.log("🧩 RPC params =", {
+      p_bike_type: dbgBikeType,
+      p_start_date: start_date,
+      p_end_date: end_date,
+      p_request_qty: request_qty,
+      p_plan: plan,
+    });
+    console.log("🧩 RPC result =", { available, rpcError });
+
+    if (rpcError) {
+      console.error("❌ RPC Error:", rpcError);
+      return Response.json(
+        { status: "error", error: rpcError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!available) {
+      return Response.json(
+        { status: "error", message: "台数が足りません" },
+        { status: 400 }
+      );
+    }
 
     // 🔹 addonsByBike → 正規化
     let normalizedAddons: NormalizedAddon[] = [];
@@ -66,6 +117,8 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    console.log("✅ Reservation saved successfully:", data);
 
     return Response.json({ status: "success", data }, { status: 200 });
   } catch (err: any) {
