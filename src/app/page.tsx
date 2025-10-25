@@ -266,10 +266,10 @@ const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
                 onChange={() => setPlan(id as any)}
               />
               {{
-                "3h": "3時間プラン（短時間利用）",
-                "6h": "6時間プラン（半日利用）",
-                "1d": "1日プラン（当日返却）",
-                "2d_plus": "1泊2日以上プラン（宿泊・連泊対応）",
+                "3h": "3時間プラン",
+                "6h": "6時間プラン",
+                "1d": "1日プラン",
+                "2d_plus": "2日以上プラン",
               }[id]}
             </label>
           ))}
