@@ -8,11 +8,7 @@ import AvailabilityChecker from "@/components/AvailabilityChecker";
 const OPEN_TIME = "08:00";
 const CLOSE_TIME = "18:30";
 const CLOSED_DAY = 3; // 水曜
-const endTime = useMemo(() => {
-  if (plan === "3h") return addHours(startTime, 3);
-  if (plan === "6h") return addHours(startTime, 6);
-  return "";
-}, [plan, startTime]);
+
 const BIKE_TYPES = [
   { id: "クロスバイク S", label: "クロスバイク S（150〜165cm）" },
   { id: "クロスバイク M", label: "クロスバイク M（165〜175cm）" },
@@ -104,7 +100,11 @@ export default function RentacyclePageV5() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("08:00");
   const [pickupTime, setPickupTime] = useState("08:00");
-
+const endTime = useMemo(() => {
+  if (plan === "3h") return addHours(startTime, 3);
+  if (plan === "6h") return addHours(startTime, 6);
+  return "";
+}, [plan, startTime]);
   const [inventory, setInventory] = useState<Record<string, number>>({});
   const [remaining, setRemaining] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
