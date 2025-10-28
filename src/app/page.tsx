@@ -115,6 +115,17 @@ const endTime = useMemo(() => {
 
   type AddonsByBike = Partial<Record<BikeType, Array<Partial<Record<string, number>>>>>;
   const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
+  // 🧩 台数を安全に更新する関数（0未満・上限超過防止）
+  const setQtySafe = (bikeId: string, value: number) => {
+    // 利用可能な上限を取得（remaining優先、fallbackにinventory）
+    const maxAvailable = remaining?.[bikeId] ?? inventory[bikeId] ?? 0;
+
+    // 上限・下限を制限
+    const safeValue = Math.max(0, Math.min(value, maxAvailable));
+
+    // 安全に状態更新
+    setQty((prev) => ({ ...prev, [bikeId]: safeValue }));
+  };
 
   /* === 初期在庫取得 === */
   useEffect(() => {
