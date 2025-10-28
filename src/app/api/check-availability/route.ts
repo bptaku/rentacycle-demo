@@ -1,37 +1,43 @@
 import { createClient } from "@/utils/supabase/server";
 
 export async function POST(req: Request) {
-  const supabase = createClient();
-  const body = await req.json();
+  try {
+    const { bike_type, start_date, end_date, request_qty } = await req.json();
 
-  const { bike_type, start_date, end_date, request_qty, plan } = body;
+    if (!bike_type || !start_date || !end_date || !request_qty) {
+      return Response.json(
+        { error: "missing_parameters" },
+        { status: 400 }
+      );
+    }
 
-  const { data, error } = await supabase.rpc("check_availability_with_period_v4_2", {
-    p_bike_type: bike_type,
-    p_start_date: start_date,
-    p_end_date: end_date,
-    p_request_qty: request_qty,
-    p_plan: plan || "standard",
-  });
+    const supabase = createClient();
 
-  if (error) {
-    console.error("RPC Error:", error);
-    return Response.json({ available: false, remaining: 0, error: error.message }, { status: 500 });
+    const { data, error } = await supabase.rpc(
+      "check_availability_with_period_v5_0",
+      {
+        p_bike_type: bike_type,
+        p_start_date: start_date,
+        p_end_date: end_date,
+        p_request_qty: request_qty,
+      }
+    );
+
+    if (error) {
+      console.error("RPC Error:", error);
+      return Response.json(
+        { error: error.message || "rpc_failed" },
+        { status: 500 }
+      );
+    }
+
+    // Supabase RPCがJSONを返すため、そのままレスポンスへ
+    return Response.json(data, { status: 200 });
+  } catch (err) {
+    console.error("API Error:", err);
+    return Response.json(
+      { error: "server_error" },
+      { status: 500 }
+    );
   }
-
-  const { data: stockData } = await supabase
-    .from("stock")
-    .select("total")
-    .eq("bike_type", bike_type)
-    .gte("date", start_date)
-    .lte("date", end_date);
-
-  const remaining = stockData?.length
-    ? Math.min(...stockData.map((s) => s.total))
-    : 0;
-
-  return Response.json({
-    available: data === true && remaining >= request_qty,
-    remaining,
-  });
 }
