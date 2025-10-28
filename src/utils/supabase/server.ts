@@ -1,13 +1,13 @@
-// src/utils/supabase/server.ts
+// ✅ サーバー側（API / 管理画面で使用）
+// 利用キー：SUPABASE_SERVICE_ROLE_KEY
+
 import { createClient } from "@supabase/supabase-js";
 
-export const supabase = () => {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!, // ✅ サービスロールキーを第2引数に
-    {
-      auth: { persistSession: false },
-      db: { schema: "public" },
-    }
-  );
-};
+export const supabaseServer = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: { persistSession: false },
+    db: { schema: "public" },
+  }
+);

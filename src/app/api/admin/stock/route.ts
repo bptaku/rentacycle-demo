@@ -1,5 +1,5 @@
 // /src/app/api/admin/stock/route.ts
-import { supabase } from "@/lib/supabaseClient"
+import { supabaseServer } from "@/utils/supabase/server";
 
 export async function GET(req: Request) {
   try {
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     if (range === "1week") end.setDate(start.getDate() + 6)
 
     // 📦 在庫データ取得
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from("stock")
       .select("date, bike_type, base_quantity, manual_adjustment, reserved, available, updated_at")
       .gte("date", start.toISOString().slice(0, 10))

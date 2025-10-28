@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { supabaseServer } from "@/utils/supabase/server";
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "missing_parameters" }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer;
 
     // 予約データをINSERT
     const { data, error } = await supabase

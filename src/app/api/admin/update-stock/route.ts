@@ -1,10 +1,11 @@
-import { supabase } from "@/lib/supabaseClient"
+import { supabaseServer } from "@/utils/supabase/server";
+
 
 export async function POST(req: Request) {
   const { date, bike_type, delta } = await req.json()
 
   // 1️⃣ 対象レコード取得（base_quantityを必ず含む）
-  const { data: stock, error: fetchError } = await supabase
+  const { data: stock, error: fetchError } = await supabaseServer
     .from("stock")
     .select("id, base_quantity, manual_adjustment, reserved")
     .eq("date", date)
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
   // 2️⃣ manual_adjustment 更新
   const newAdjustment = (stock.manual_adjustment || 0) + delta
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseServer
     .from("stock")
     .update({
       manual_adjustment: newAdjustment,

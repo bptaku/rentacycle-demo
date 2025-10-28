@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { supabaseServer } from "@/utils/supabase/server";
 
 export async function POST(req: Request) {
   try {
@@ -8,7 +8,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "missing_id" }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer;
 
     // 現在の予約データ取得
     const { data: reservation, error: fetchError } = await supabase

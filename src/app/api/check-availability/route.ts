@@ -1,5 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
-
+import { supabaseServer } from "@/utils/supabase/server";
 export async function POST(req: Request) {
   try {
     const { bike_type, start_date, end_date, request_qty } = await req.json();
@@ -11,7 +10,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer;
 
     const { data, error } = await supabase.rpc(
       "check_availability_with_period_v5_0",

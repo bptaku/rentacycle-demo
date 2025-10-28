@@ -1,7 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { supabaseServer } from "@/utils/supabase/server";
 
 export async function GET(req: Request) {
-  const supabase = createClient();
+  const supabase = supabaseServer;
+  const { searchParams } = new URL(req.url);
+
+export async function GET(req: Request) {
+  const supabase = supabaseServer;
   const { searchParams } = new URL(req.url);
 
   const start_date = searchParams.get("start_date");
