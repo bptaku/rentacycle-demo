@@ -39,10 +39,12 @@ export default function AvailabilityChecker({
     return Boolean(bikeType && startDate && endDate && requestQty >= 0);
   }, [bikeType, startDate, endDate, requestQty]);
 
+  // 親コンポーネントに状態を通知
   useEffect(() => {
     onStatusChange?.({ loading, error, available, remaining });
   }, [loading, error, available, remaining, onStatusChange]);
 
+  // マウント／アンマウント処理
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -52,6 +54,7 @@ export default function AvailabilityChecker({
     };
   }, []);
 
+  // メインの在庫チェック処理
   useEffect(() => {
     if (!isReady) {
       setLoading(false);
@@ -72,7 +75,6 @@ export default function AvailabilityChecker({
       abortRef.current = controller;
 
       try {
-        console.log("🔎 Fetch先URL: /api/check-availability");
         const res = await fetch(`/api/check-availability`, {
           method: "POST",
           signal: controller.signal,
@@ -87,15 +89,17 @@ export default function AvailabilityChecker({
 
         if (!res.ok) throw new Error(`在庫APIエラー: ${res.status}`);
 
-        const data: { available?: boolean; remaining?: number | null } = await res.json();
-        if (!mountedRef.current) return;
+        const json = await res.json();
+
+        // ✅ RPCレスポンスが { status: "ok", data: {...} } の場合に対応
+        const result = json.data ?? json;
 
         const remainingNum =
-          typeof data.remaining === "number"
-            ? data.remaining
-            : Number(data.remaining) || null;
+          typeof result.remaining === "number"
+            ? result.remaining
+            : Number(result.remaining) || null;
 
-        setAvailable(data.available ?? null);
+        setAvailable(result.available ?? null);
         setRemaining(remainingNum);
         setLoading(false);
       } catch (e: any) {
@@ -129,9 +133,7 @@ export default function AvailabilityChecker({
       <p className="text-sm font-medium text-green-700">残り{remaining}台</p>
     );
   } else {
-    content = (
-      <p className="text-sm font-semibold text-red-600">予約不可</p>
-    );
+    content = <p className="text-sm font-semibold text-red-600">予約不可</p>;
   }
 
   return (

@@ -148,26 +148,37 @@ export default function AdminReservationsPage() {
 
           /* --- addons（車種ごとに縦並び） --- */
           const addonsRaw = r.addons;
-          let addonsArray: any[] = [];
-          try {
-            if (Array.isArray(addonsRaw)) {
-              addonsArray = addonsRaw;
-            } else if (typeof addonsRaw === "string" && addonsRaw.trim().startsWith("[")) {
-              addonsArray = JSON.parse(addonsRaw);
-            }
-          } catch (e) {
-            addonsArray = [];
-          }
-          const addonsList = addonsArray
-            .map((row: any) => {
-              const items = Object.entries(row.addons || {})
-                .filter(([_, v]) => Number(v) > 0)
-                .map(([k, v]) => `🧩 ${k} ×${v}`)
-                .join("\n");
-              return items ? `🚲 ${row.bike_type}\n${items}` : "";
-            })
-            .filter((s) => s !== "")
-            .join("\n\n");
+let addonsArray: any[] = [];
+
+try {
+  if (Array.isArray(addonsRaw)) {
+    addonsArray = addonsRaw;
+  } else if (typeof addonsRaw === "string") {
+    addonsArray = JSON.parse(addonsRaw);
+  } else if (addonsRaw && typeof addonsRaw === "object") {
+    addonsArray = [addonsRaw];
+  }
+} catch (e) {
+  console.warn("addons parse error:", e);
+  addonsArray = [];
+}
+
+const addonsList = addonsArray
+  .map((row: any) => {
+    const entries = Object.entries(row.addons || {})
+      .filter(([_, v]) => Number(v) > 0);
+    if (entries.length === 0) return "";
+
+    const items = entries
+      .map(([k, v]) => `🧩 ${k} ×${v}`)
+      .join("\n");
+    return `🚲 ${row.bike_type}\n${items}`;
+  })
+  .filter(Boolean)
+  .join("\n\n");
+
+const displayText = addonsList || "— オプションなし —";
+
 
           const yen = new Intl.NumberFormat("ja-JP", {
             style: "currency",

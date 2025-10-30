@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
 import AvailabilityChecker from "@/components/AvailabilityChecker";
-
+import { useCallback } from "react";
 /* =========================================================
    定義
    ========================================================= */
@@ -126,7 +126,15 @@ const endTime = useMemo(() => {
     // 安全に状態更新
     setQty((prev) => ({ ...prev, [bikeId]: safeValue }));
   };
-
+const handleStatusChange = useCallback(
+  (bikeId: string, status: { remaining?: number }) => {
+    setRemaining((prev) => {
+      if (prev?.[bikeId] === status.remaining) return prev; // 値が変わってないなら何もしない
+      return { ...(prev || {}), [bikeId]: status.remaining ?? 0 };
+    });
+  },
+  []
+);
   /* === 初期在庫取得 === */
   useEffect(() => {
     async function fetchStock() {
@@ -328,14 +336,15 @@ const endTime = useMemo(() => {
             <div key={id} className="flex flex-col sm:flex-row sm:items-center sm:gap-3 border-b py-2">
               <div className="w-60">{label}</div>
               <AvailabilityChecker
-                bikeType={id}
-                startDate={date}
-                endDate={returnDate ? returnDate.toISOString().split("T")[0] : null}
-                requestQty={qty[id] || 0}
-                onStatusChange={(status) =>
-                  setRemaining((prev) => ({ ...(prev || {}), [id]: status.remaining ?? 0 }))
-                }
-              />
+  bikeType={id}
+  startDate={date}
+  endDate={returnDate ? returnDate.toISOString().split("T")[0] : null}
+  requestQty={qty[id] || 0}
+  onStatusChange={(status) => {
+    const safeRemaining = status.remaining ?? 0; // nullを0扱いに
+    setRemaining((prev) => ({ ...(prev || {}), [id]: safeRemaining }));
+  }}
+/>
               <input
                 type="number"
                 min={0}
@@ -424,21 +433,37 @@ const endTime = useMemo(() => {
             const end_date = returnDate ? returnDate.toISOString().split("T")[0] : null;
 
             // 🧩 在庫確認
-            for (const t of Object.keys(qty)) {
-              const q = qty[t as BikeType];
-              if (q > 0) {
-                const res = await fetch("/api/check-availability", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ bike_type: t, start_date: date, end_date, request_qty: q, plan }),
-                });
-                const check = await res.json();
-                if (!check.ok || check.available === false) {
-                  alert(`${t} の在庫が足りません。別の日または台数を変更してください。`);
-                  return;
-                }
-              }
-            }
+for (const t of Object.keys(qty)) {
+  const q = qty[t as BikeType];
+  if (q > 0) {
+    const res = await fetch("/api/check-availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bike_type: t,
+        start_date: date,
+        end_date,
+        request_qty: q,
+      }),
+    });
+
+    const check = await res.json();
+    const result = check.data ?? check;
+
+    // 🔍 デバッグ出力
+    console.log("在庫チェック結果:", result);
+
+    // ✅ SupabaseのJSONレスポンスを確実に真偽値変換
+    const available =
+      result.available === true || result.available === "true" ? true : false;
+
+    if (!available) {
+      alert(`${t} の在庫が足りません。別の日または台数を変更してください。`);
+      return;
+    }
+  }
+}
+
 
             // 🧩 予約送信
             const payload = {

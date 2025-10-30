@@ -29,7 +29,6 @@ export async function POST(req: Request) {
       p_start_date: start_date,
       p_end_date: end_date,
       p_request_qty: qty,
-      p_plan: plan || null, // v5.0でプラン判定に対応している場合
     });
 
     if (error) {
@@ -45,7 +44,6 @@ export async function POST(req: Request) {
         start_date,
         end_date,
         request_qty: qty,
-        plan: plan || null,
         data,
       },
       { status: 200 }
