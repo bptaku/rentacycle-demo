@@ -148,36 +148,54 @@ export default function AdminReservationsPage() {
 
           /* --- addons（車種ごとに縦並び） --- */
           const addonsRaw = r.addons;
-let addonsArray: any[] = [];
+let addonsData: Record<string, any[]> = {};
 
 try {
-  if (Array.isArray(addonsRaw)) {
-    addonsArray = addonsRaw;
-  } else if (typeof addonsRaw === "string") {
-    addonsArray = JSON.parse(addonsRaw);
-  } else if (addonsRaw && typeof addonsRaw === "object") {
-    addonsArray = [addonsRaw];
+  const parsed = typeof addonsRaw === "string" ? JSON.parse(addonsRaw) : addonsRaw;
+
+  // object（v5形式） or array（旧形式） の両方に対応
+  if (Array.isArray(parsed)) {
+    // 旧形式 [{ bike_type, addons: {...}}] を変換
+    addonsData = parsed.reduce((acc: Record<string, any[]>, row: any) => {
+      const bt = row.bike_type || "不明車種";
+      acc[bt] = acc[bt] || [];
+      acc[bt].push(row.addons || {});
+      return acc;
+    }, {});
+  } else if (parsed && typeof parsed === "object") {
+    addonsData = parsed as Record<string, any[]>;
   }
 } catch (e) {
   console.warn("addons parse error:", e);
-  addonsArray = [];
+  addonsData = {};
 }
 
-const addonsList = addonsArray
-  .map((row: any) => {
-    const entries = Object.entries(row.addons || {})
-      .filter(([_, v]) => Number(v) > 0);
-    if (entries.length === 0) return "";
+// オプション表示用に整形
+const addonsList = Object.entries(addonsData)
+  .map(([bikeType, perBikeList]) => {
+    if (!Array.isArray(perBikeList) || perBikeList.length === 0) return "";
 
-    const items = entries
-      .map(([k, v]) => `🧩 ${k} ×${v}`)
+    // 各台ごとのオプションを列挙
+    const bikesWithOptions = perBikeList
+      .map((addons, i) => {
+        const opts = Object.entries(addons || {})
+          .filter(([_, v]) => Number(v) > 0)
+          .map(([k, v]) => `🧩 ${k} ×${v}`)
+          .join(", ");
+        return opts ? `#${i + 1}: ${opts}` : "";
+      })
+      .filter(Boolean)
       .join("\n");
-    return `🚲 ${row.bike_type}\n${items}`;
+
+    return bikesWithOptions
+      ? `🚲 ${bikeType}\n${bikesWithOptions}`
+      : "";
   })
   .filter(Boolean)
   .join("\n\n");
 
 const displayText = addonsList || "— オプションなし —";
+
 
 
           const yen = new Intl.NumberFormat("ja-JP", {

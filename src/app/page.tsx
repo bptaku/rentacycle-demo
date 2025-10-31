@@ -336,15 +336,16 @@ const handleStatusChange = useCallback(
             <div key={id} className="flex flex-col sm:flex-row sm:items-center sm:gap-3 border-b py-2">
               <div className="w-60">{label}</div>
               <AvailabilityChecker
-  bikeType={id}
-  startDate={date}
-  endDate={returnDate ? returnDate.toISOString().split("T")[0] : null}
-  requestQty={qty[id] || 0}
-  onStatusChange={(status) => {
+                bikeType={id}
+                startDate={date}
+                endDate={returnDate ? returnDate.toISOString().split("T")[0] : null}
+                requestQty={qty[id] || 0}
+                onStatusChange={(status) => {
     const safeRemaining = status.remaining ?? 0; // nullを0扱いに
     setRemaining((prev) => ({ ...(prev || {}), [id]: safeRemaining }));
-  }}
-/>
+                }}
+              />
+
               <input
                 type="number"
                 min={0}

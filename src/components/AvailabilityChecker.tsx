@@ -41,8 +41,14 @@ export default function AvailabilityChecker({
 
   // 親コンポーネントに状態を通知
   useEffect(() => {
-    onStatusChange?.({ loading, error, available, remaining });
+  onStatusChange?.({
+      loading,
+      error,
+      available,
+      remaining: remaining ?? 0,
+    });
   }, [loading, error, available, remaining, onStatusChange]);
+
 
   // マウント／アンマウント処理
   useEffect(() => {
@@ -56,14 +62,20 @@ export default function AvailabilityChecker({
 
   // メインの在庫チェック処理
   useEffect(() => {
-    if (!isReady) {
+       // 📌 条件1: 入力未完 or 必須項目欠落 → チェックしない
+   if (!isReady) {
       setLoading(false);
       setError(null);
       setAvailable(null);
       setRemaining(null);
       return;
     }
-
+    // 📌 条件2: ユーザーが台数を入力中なら在庫チェックを一時停止
+    const active = document.activeElement;
+    if (active && active.tagName === "INPUT" && active.getAttribute("type") === "number") {
+      // console.log("⏸ 台数入力中 → 在庫チェック停止");
+      return;
+    }
     if (timerRef.current) clearTimeout(timerRef.current);
     if (abortRef.current) abortRef.current.abort();
 
@@ -119,7 +131,7 @@ export default function AvailabilityChecker({
   if (!isReady) {
     content = (
       <p className="text-sm text-gray-400 italic">
-        日付・車種・台数を選ぶと在庫を表示します
+        プラン・日付を選ぶと在庫を表示します
       </p>
     );
   } else if (loading) {
