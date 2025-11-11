@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     // ステータス更新（Triggerが在庫復元を実行）
     const { error: updateError } = await supabase
       .from("reservations")
-      .update({ status: "canceled", updated_at: new Date().toISOString() })
+      .update({ status: "canceled" })
       .eq("id", id);
 
     if (updateError) {

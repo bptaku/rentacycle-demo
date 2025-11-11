@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   // 3️⃣ available 再計算（base_quantityがnullなら0で計算）
   const available =
-    (stock.base_quantity || 0) + newAdjustment - (stock.reserved || 0)
+    (stock.base_quantity || 0) - newAdjustment - (stock.reserved || 0)
 
   return Response.json({
     status: "ok",

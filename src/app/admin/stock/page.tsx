@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw, LayoutGrid } from "lucide-react";
 import StockTable from "./StockTable"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -60,64 +61,92 @@ const { data, error, mutate, isLoading } = useSWR(key, fetcher)
   const dateList = Object.keys(grouped).sort()
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">在庫管理</h1>
+    <div className="min-h-screen bg-slate-50/70 p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold text-slate-900">在庫管理</h1>
+          <p className="text-sm text-slate-500">
+            オンライン以外で受けた予約も含めて在庫を把握し、貸出準備をスムーズに進めましょう。
+          </p>
+        </header>
 
-      {/* 📅 日付ナビゲーション */}
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={() => shiftDate(-1)}
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
-        >
-          ⏪ 前日
-        </button>
-
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="border rounded px-2 py-1"
-        />
-
-        <button
-          onClick={() => shiftDate(+1)}
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
-        >
-          翌日 ⏩
-        </button>
-
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value as "1d" | "1week")}
-          className="border rounded px-2 py-1 ml-4"
-        >
-          <option value="1d">1日</option>
-          <option value="1week">1週間</option>
-        </select>
-
-        <button
-          onClick={() => setSelectedDate(today)}
-          className="ml-auto px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-        >
-          今日に戻る
-        </button>
-      </div>
-
-      {/* 🧾 テーブル表示 */}
-      {range === "1week" ? (
-        <div className="space-y-6">
-          {dateList.map((d) => (
-            <div key={d}>
-              <h2 className="text-lg font-semibold mb-2 border-b border-gray-300">
-                📅 {d}
-              </h2>
-              <StockTable data={grouped[d]} onAdjust={handleAdjust} />
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                <CalendarDays className="h-3.5 w-3.5" />
+                {selectedDate}
+              </span>
+              <div className="hidden text-xs text-slate-400 md:block">在庫の基準日</div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <StockTable data={data.stocks} onAdjust={handleAdjust} />
-      )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => shiftDate(-1)}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                前日
+              </button>
+
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="appearance-none border-none bg-transparent text-slate-700 focus:outline-none"
+                />
+              </div>
+
+              <button
+                onClick={() => shiftDate(+1)}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+              >
+                翌日
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <div className="relative">
+                <select
+                  value={range}
+                  onChange={(e) => setRange(e.target.value as "1d" | "1week")}
+                  className="appearance-none rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 focus:outline-none"
+                >
+                  <option value="1d">1日表示</option>
+                  <option value="1week">1週間表示</option>
+                </select>
+                <LayoutGrid className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+
+              <button
+                onClick={() => setSelectedDate(today)}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                今日に戻る
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-6">
+          {range === "1week" ? (
+            dateList.map((d) => (
+              <div key={d} className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                  <CalendarDays className="h-4 w-4" />
+                  {d}
+                </div>
+                <StockTable data={grouped[d]} onAdjust={handleAdjust} />
+              </div>
+            ))
+          ) : (
+            <StockTable data={data.stocks} onAdjust={handleAdjust} />
+          )}
+        </section>
+      </div>
     </div>
-  )
+  );
 }

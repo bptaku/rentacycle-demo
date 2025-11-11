@@ -15,6 +15,7 @@ type Props = {
   }) => void;
   debounceMs?: number;
   className?: string;
+  fallbackRemaining?: number | null;
 };
 
 export default function AvailabilityChecker({
@@ -25,6 +26,7 @@ export default function AvailabilityChecker({
   onStatusChange,
   debounceMs = 300,
   className = "",
+  fallbackRemaining = null,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,23 +36,33 @@ export default function AvailabilityChecker({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef<boolean>(false);
+  const statusCallbackRef = useRef<Props["onStatusChange"] | undefined>(undefined);
+
+  useEffect(() => {
+    statusCallbackRef.current = onStatusChange;
+  }, [onStatusChange]);
+
+  useEffect(() => {
+    if (remaining == null && typeof fallbackRemaining === "number") {
+      setRemaining(fallbackRemaining);
+    }
+  }, [fallbackRemaining, remaining]);
 
   const isReady = useMemo(() => {
     return Boolean(bikeType && startDate && endDate && requestQty >= 0);
   }, [bikeType, startDate, endDate, requestQty]);
 
-  // 親コンポーネントに状態を通知
   useEffect(() => {
-  onStatusChange?.({
-      loading,
-      error,
-      available,
-      remaining: remaining ?? 0,
-    });
-  }, [loading, error, available, remaining, onStatusChange]);
+    if (statusCallbackRef.current) {
+      statusCallbackRef.current({
+        loading,
+        error,
+        available,
+        remaining,
+      });
+    }
+  }, [loading, error, available, remaining]);
 
-
-  // マウント／アンマウント処理
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -60,22 +72,25 @@ export default function AvailabilityChecker({
     };
   }, []);
 
-  // メインの在庫チェック処理
   useEffect(() => {
-       // 📌 条件1: 入力未完 or 必須項目欠落 → チェックしない
-   if (!isReady) {
+    if (!isReady) {
       setLoading(false);
       setError(null);
       setAvailable(null);
       setRemaining(null);
       return;
     }
-    // 📌 条件2: ユーザーが台数を入力中なら在庫チェックを一時停止
-    const active = document.activeElement;
-    if (active && active.tagName === "INPUT" && active.getAttribute("type") === "number") {
-      // console.log("⏸ 台数入力中 → 在庫チェック停止");
+
+    const active = document.activeElement as HTMLElement | null;
+    if (
+      active &&
+      active.tagName === "INPUT" &&
+      (active as HTMLInputElement).type === "number" &&
+      active.hasAttribute("data-availability-pause")
+    ) {
       return;
     }
+
     if (timerRef.current) clearTimeout(timerRef.current);
     if (abortRef.current) abortRef.current.abort();
 
@@ -102,8 +117,6 @@ export default function AvailabilityChecker({
         if (!res.ok) throw new Error(`在庫APIエラー: ${res.status}`);
 
         const json = await res.json();
-
-        // ✅ RPCレスポンスが { status: "ok", data: {...} } の場合に対応
         const result = json.data ?? json;
 
         const remainingNum =
@@ -111,6 +124,7 @@ export default function AvailabilityChecker({
             ? result.remaining
             : Number(result.remaining) || null;
 
+        if (!mountedRef.current) return;
         setAvailable(result.available ?? null);
         setRemaining(remainingNum);
         setLoading(false);
@@ -125,7 +139,6 @@ export default function AvailabilityChecker({
     }, debounceMs);
   }, [isReady, bikeType, startDate, endDate, requestQty, debounceMs]);
 
-  /* ========= 表示ロジック ========= */
   let content: React.ReactNode;
 
   if (!isReady) {
@@ -138,19 +151,25 @@ export default function AvailabilityChecker({
     content = <p className="text-sm text-gray-500 animate-pulse">在庫を確認中…</p>;
   } else if (error) {
     content = <p className="text-sm text-red-600">{error}</p>;
-  } else if (remaining === 0) {
-    content = <p className="text-sm font-semibold text-red-600">すべて貸出中</p>;
-  } else if (typeof remaining === "number" && remaining > 0) {
-    content = (
-      <p className="text-sm font-medium text-green-700">残り{remaining}台</p>
-    );
-  } else {
+  } else if (typeof remaining === "number") {
+    content =
+      remaining <= 0 ? (
+        <p className="text-sm font-semibold text-red-600">すべて貸出中</p>
+      ) : (
+        <p className="text-sm font-medium text-green-700">残り{remaining}台</p>
+      );
+  } else if (available === false) {
     content = <p className="text-sm font-semibold text-red-600">予約不可</p>;
+  } else if (typeof fallbackRemaining === "number") {
+    content =
+      fallbackRemaining <= 0 ? (
+        <p className="text-sm font-semibold text-red-600">すべて貸出中</p>
+      ) : (
+        <p className="text-sm font-medium text-green-700">残り{fallbackRemaining}台</p>
+      );
+  } else {
+    content = <p className="text-sm text-gray-500">在庫状況を確認中です</p>;
   }
 
-  return (
-    <div className={`text-center transition-all duration-200 ${className}`}>
-      {content}
-    </div>
-  );
+  return <div className={`text-center transition-all duration-200 ${className}`}>{content}</div>;
 }
