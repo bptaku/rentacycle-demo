@@ -45,7 +45,7 @@ export async function PATCH(
     }
 
     const bikes = parseBikes(reservation.bikes);
-    const totalBikes = Object.values(bikes).reduce((sum, count) => sum + (count || 0), 0);
+    const totalBikes = Object.values<number>(bikes).reduce((sum, count) => sum + (count || 0), 0);
     const dropoffPrice = dropoff ? DROPOFF_PRICE * totalBikes : 0;
     const baseSubtotal =
       (reservation.subtotal || 0) +
