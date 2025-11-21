@@ -15,6 +15,9 @@ import {
   MapPin,
   Clock,
   JapaneseYen,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
 } from "lucide-react";
 import BikeRevenueSection from "./BikeRevenueSection";
 
@@ -45,6 +48,9 @@ type Reservation = {
   insurance_price: number;
   total_price: number;
   status: string;
+  cancel_requested: boolean;
+  cancel_requested_at: string | null;
+  cancel_reason: string | null;
   created_at: string;
 };
 
@@ -100,7 +106,9 @@ export default function AdminReservationsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [updatingDropoff, setUpdatingDropoff] = useState<string | null>(null);
+  const [approvingCancel, setApprovingCancel] = useState<string | null>(null);
   const [showRevenue, setShowRevenue] = useState(false);
+  const [savedReservations, setSavedReservations] = useState<Set<string>>(new Set());
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -177,7 +185,14 @@ export default function AdminReservationsPage() {
         if (json.status !== "ok") {
           throw new Error(json.message || "保存に失敗しました");
         }
-        alert("自転車番号を保存しました");
+        setSavedReservations((prev) => new Set(prev).add(reservation.id));
+        setTimeout(() => {
+          setSavedReservations((prev) => {
+            const next = new Set(prev);
+            next.delete(reservation.id);
+            return next;
+          });
+        }, 3000);
         mutate();
       } catch (error: any) {
         alert(error?.message || "保存に失敗しました");
@@ -256,6 +271,30 @@ export default function AdminReservationsPage() {
     [mutate]
   );
 
+  const handleApproveCancel = useCallback(
+    async (reservation: Reservation) => {
+      if (!confirm("このキャンセル申請を承認しますか？\n承認後、予約はキャンセルされ、在庫が自動的に復元されます。")) return;
+      setApprovingCancel(reservation.id);
+      try {
+        const res = await fetch(`/api/admin/reservations/${reservation.id}/cancel-approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const json = await res.json();
+        if (json.status !== "ok") {
+          throw new Error(json.message || "キャンセル承認に失敗しました");
+        }
+        mutate();
+        alert("キャンセルを承認しました。在庫が自動的に復元されます。");
+      } catch (error: any) {
+        alert(error?.message || "キャンセル承認に失敗しました");
+      } finally {
+        setApprovingCancel(null);
+      }
+    },
+    [mutate]
+  );
+
   return (
     <div className="min-h-screen bg-slate-50/70 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -309,14 +348,14 @@ export default function AdminReservationsPage() {
               <label className="flex flex-col gap-2 text-sm text-slate-500">
                 <span className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                   <Search className="h-3.5 w-3.5" />
-                  検索（名前 / メール）
+                  検索（名前 / メール / 予約番号）
                 </span>
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="キーワードで絞り込み"
+                    placeholder="キーワードで絞り込み（予約番号は8文字）"
                     className="w-full border-none bg-transparent text-slate-700 focus:outline-none"
                   />
                 </div>
@@ -395,6 +434,12 @@ export default function AdminReservationsPage() {
                               {reservation.insurance_plan}プラン
                             </span>
                           )}
+                          {reservation.cancel_requested && reservation.status !== "canceled" && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 border border-red-300">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              キャンセル申請中
+                            </span>
+                          )}
                         </div>
 
                         <div className="grid gap-3 text-sm sm:grid-cols-2">
@@ -436,6 +481,8 @@ export default function AdminReservationsPage() {
                                     {Array.from({ length: count }).map((_, idx) => {
                                       const addonSet = addonSets[idx] || {};
                                       const numberValue = inputs?.[bikeType]?.[idx] ?? "";
+                                      const savedNumber = reservation.bike_numbers?.[bikeType]?.[idx];
+                                      const isSaved = savedNumber && savedNumber === numberValue.trim();
                                       return (
                                         <div key={idx} className="rounded-2xl border border-white bg-white p-3 shadow-sm">
                                           <div className="flex items-center gap-2">
@@ -449,8 +496,15 @@ export default function AdminReservationsPage() {
                                                 handleBikeNumberChange(reservation.id, bikeType, idx, e.target.value)
                                               }
                                               placeholder="番号を入力"
-                                              className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                                              className={`flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none ${
+                                                isSaved
+                                                  ? "border-emerald-300 bg-emerald-50/50 focus:border-emerald-400"
+                                                  : "border-slate-200 focus:border-blue-400"
+                                              }`}
                                             />
+                                            {isSaved && (
+                                              <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+                                            )}
                                           </div>
                                           <div className="mt-2 text-xs text-slate-500">
                                             {formatAddonList(addonSet)}
@@ -500,12 +554,49 @@ export default function AdminReservationsPage() {
                         <button
                           onClick={() => handleSaveBikeNumbers(reservation)}
                           disabled={saving === reservation.id}
-                          className="w-full rounded-xl border border-green-200 bg-white px-4 py-2 text-sm font-medium text-green-600 transition hover:bg-green-50 disabled:opacity-50"
+                          className={`w-full rounded-xl border px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
+                            savedReservations.has(reservation.id)
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                              : "border-green-200 bg-white text-green-600 hover:bg-green-50"
+                          }`}
                         >
-                          {saving === reservation.id ? "保存中..." : "自転車番号を保存"}
+                          {saving === reservation.id
+                            ? "保存中..."
+                            : savedReservations.has(reservation.id)
+                            ? "✓ 保存済み"
+                            : "自転車番号を保存"}
                         </button>
 
-                        {reservation.status !== "canceled" && (
+                        {reservation.cancel_requested && reservation.status !== "canceled" && (
+                          <div className="space-y-2">
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                              <p className="font-medium">キャンセル申請あり</p>
+                              {reservation.cancel_requested_at && (
+                                <p className="mt-1 text-red-600">
+                                  申請日時: {new Date(reservation.cancel_requested_at).toLocaleString("ja-JP")}
+                                </p>
+                              )}
+                              {reservation.cancel_reason && (
+                                <p className="mt-1 text-red-600">理由: {reservation.cancel_reason}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleApproveCancel(reservation)}
+                              disabled={approvingCancel === reservation.id}
+                              className="w-full rounded-xl border border-red-300 bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:bg-slate-300 disabled:text-slate-500"
+                            >
+                              {approvingCancel === reservation.id ? (
+                                <>承認中...</>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                                  キャンセル申請を承認
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                        {!reservation.cancel_requested && reservation.status !== "canceled" && (
                           <button
                             onClick={() => handleCancel(reservation)}
                             className="w-full rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"

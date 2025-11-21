@@ -64,6 +64,12 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
 
   const planName = PLAN_LABELS[data.plan] || data.plan;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  
+  // キャンセル申請リンクのベースURL
+  // 本番環境ではNEXT_PUBLIC_BASE_URLを設定、開発環境ではlocalhost
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const cancelUrl = `${baseUrl}/cancel/${data.reservationId}`;
 
   const bikeLines = Object.entries(data.bikes)
     .filter(([_, count]) => count > 0)
@@ -87,12 +93,14 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
     planName,
     bikeLines,
     optionLines,
+    cancelUrl,
   });
   const emailText = buildEmailText({
     ...data,
     planName,
     bikeLines,
     optionLines,
+    cancelUrl,
   });
 
   try {
@@ -118,6 +126,7 @@ type TemplateParams = ReservationEmailData & {
   planName: string;
   bikeLines: string[];
   optionLines: string[];
+  cancelUrl: string;
 };
 
 function buildEmailHtml(params: TemplateParams) {
@@ -137,7 +146,11 @@ function buildEmailHtml(params: TemplateParams) {
     insurancePrice,
     discount,
     totalPrice,
+    cancelUrl,
   } = params;
+
+  // 予約番号を短い形式に（最初の8文字）
+  const reservationIdShort = reservationId ? String(reservationId).slice(0, 8) : reservationId;
 
   return `<!DOCTYPE html>
 <html>
@@ -239,7 +252,7 @@ function buildEmailHtml(params: TemplateParams) {
         </div>
         <div class="section">
           <div class="section-title">予約番号</div>
-          <div class="reservation-id">${reservationId}</div>
+          <div class="reservation-id">${reservationIdShort}</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 6px;">
             予約の確認やお問い合わせの際に必要となります。
           </p>
@@ -279,6 +292,18 @@ function buildEmailHtml(params: TemplateParams) {
           <p>ご予約いただいた日時に、お店までお越しください。</p>
           <p>ご不明な点がございましたら、お気軽にお問い合わせください。</p>
         </div>
+        <div class="section">
+          <div class="section-title">キャンセルをご希望の場合</div>
+          <p>予約のキャンセルをご希望の場合は、以下のリンクからキャンセル申請をお願いいたします。</p>
+          <p style="margin-top: 12px;">
+            <a href="${cancelUrl}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+              キャンセル申請はこちら
+            </a>
+          </p>
+          <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">
+            ※ キャンセル申請後、お店で承認が必要です。承認され次第、確認メールをお送りします。
+          </p>
+        </div>
       </div>
       <div class="footer">
         <p>このメールは自動送信されています。</p>
@@ -306,7 +331,11 @@ function buildEmailText(params: TemplateParams) {
     insurancePrice,
     discount,
     totalPrice,
+    cancelUrl,
   } = params;
+
+  // 予約番号を短い形式に（最初の8文字）
+  const reservationIdShort = reservationId ? String(reservationId).slice(0, 8) : reservationId;
 
   const lines: string[] = [];
   lines.push("ご予約ありがとうございます");
@@ -317,7 +346,7 @@ function buildEmailText(params: TemplateParams) {
   lines.push("以下の内容で予約を承りました。");
   lines.push("");
   lines.push("【予約番号}");
-  lines.push(reservationId);
+  lines.push(reservationIdShort);
   lines.push("");
   lines.push("【プラン】");
   lines.push(planName);
@@ -347,6 +376,12 @@ function buildEmailText(params: TemplateParams) {
   lines.push("【ご来店について】");
   lines.push("ご予約いただいた日時に、お店までお越しください。");
   lines.push("ご不明な点がございましたら、お気軽にお問い合わせください。");
+  lines.push("");
+  lines.push("【キャンセルをご希望の場合】");
+  lines.push("予約のキャンセルをご希望の場合は、以下のURLからキャンセル申請をお願いいたします。");
+  lines.push(cancelUrl);
+  lines.push("");
+  lines.push("※ キャンセル申請後、お店で承認が必要です。承認され次第、確認メールをお送りします。");
   lines.push("");
   lines.push("---");
   lines.push("このメールは自動送信されています。");

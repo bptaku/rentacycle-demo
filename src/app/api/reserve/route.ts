@@ -161,6 +161,7 @@ export async function POST(req: Request) {
 
     const reservation = data?.[0];
 
+    // メール送信（非同期で実行、失敗しても予約は成功）
     if (reservation && email) {
       sendReservationConfirmationEmail({
         reservationId: reservation.id,
@@ -181,9 +182,19 @@ export async function POST(req: Request) {
         dropoffPrice: dropoff_price || 0,
         discount: discount || 0,
         totalPrice: total_price || 0,
-      }).catch((emailError) => {
-        console.error("Failed to send reservation email:", emailError);
-      });
+      })
+        .then((result) => {
+          if (result.success) {
+            console.log(`✅ 予約確認メール送信成功: ${reservation.id} → ${email}`);
+          } else {
+            console.error(`❌ 予約確認メール送信失敗: ${reservation.id} → ${email}`, result.error);
+          }
+        })
+        .catch((emailError) => {
+          console.error(`❌ 予約確認メール送信エラー: ${reservation.id} → ${email}`, emailError);
+        });
+    } else if (!email) {
+      console.warn(`⚠️ メールアドレスが未入力のため、予約確認メールを送信できません: ${reservation?.id}`);
     }
 
     return NextResponse.json({ status: "ok", message: "予約が確定しました", data }, { status: 200 });

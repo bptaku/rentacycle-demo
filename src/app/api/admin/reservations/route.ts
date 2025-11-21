@@ -51,6 +51,9 @@ export async function GET(req: NextRequest) {
         insurance_price,
         total_price,
         status,
+        cancel_requested,
+        cancel_requested_at,
+        cancel_reason,
         created_at
       `
       )
@@ -64,7 +67,19 @@ export async function GET(req: NextRequest) {
     }
 
     if (search && search.trim()) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      const searchTerm = search.trim();
+      
+      // 8文字の16進数（予約番号の形式）の場合、IDでLIKE検索
+      // 例: "a66cff4e" のような形式
+      const isReservationId = /^[0-9a-f]{8}$/i.test(searchTerm);
+      
+      if (isReservationId) {
+        // 予約番号検索: IDの最初の8文字で検索
+        query = query.ilike("id", `${searchTerm}%`);
+      } else {
+        // 通常の検索: 名前・メールで検索
+        query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
+      }
     }
 
     query = query
@@ -103,6 +118,9 @@ export async function GET(req: NextRequest) {
           insurance_price: r.insurance_price || 0,
           total_price: r.total_price,
           status: r.status,
+          cancel_requested: r.cancel_requested || false,
+          cancel_requested_at: r.cancel_requested_at || null,
+          cancel_reason: r.cancel_reason || null,
           created_at: r.created_at,
         } as const;
       }),
