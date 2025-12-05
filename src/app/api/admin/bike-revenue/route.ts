@@ -3,15 +3,19 @@ import { supabaseServer } from "@/utils/supabase/server";
 
 const PRICE_TABLE = {
   クロス: { "6h": 2500, "1d": 3500, "2d_plus": 6500, addDay: 2700 },
+  ロード: { "6h": 3000, "1d": 4000, "2d_plus": 7500, addDay: 3000 },
   電動A: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動B: { "6h": 4500, "1d": 5500, "2d_plus": 11000, addDay: 4500 },
+  電動C: { "6h": 7500, "1d": 8500, "2d_plus": 12000, addDay: 5000 },
   キッズ: { "6h": 500, "1d": 500, "2d_plus": 1000, addDay: 500 },
 };
 
 function priceKeyOf(bikeType: string) {
   if (bikeType.startsWith("クロスバイク")) return "クロス" as const;
+  if (bikeType.startsWith("ロードバイク")) return "ロード" as const;
   if (bikeType.startsWith("電動A")) return "電動A" as const;
-  if (bikeType === "電動B") return "電動B" as const;
+  if (bikeType.startsWith("電動B")) return "電動B" as const;
+  if (bikeType.startsWith("電動C")) return "電動C" as const;
   if (bikeType.startsWith("キッズ")) return "キッズ" as const;
   return "クロス" as const;
 }

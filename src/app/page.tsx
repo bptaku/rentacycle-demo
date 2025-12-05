@@ -20,57 +20,84 @@ const CLOSE_TIME = "18:30";
 const CLOSED_DAY = 3; // 水曜
 
 const BIKE_TYPES = [
-  { id: "クロスバイク S", label: "クロスバイク S（150〜165cm）" },
-  { id: "クロスバイク M", label: "クロスバイク M（165〜175cm）" },
-  { id: "クロスバイク L", label: "クロスバイク L（175〜185cm）" },
-  { id: "電動A S", label: "電動A S（150〜165cm）" },
-  { id: "電動A M", label: "電動A M（165〜175cm）" },
-  { id: "電動A L", label: "電動A L（175〜185cm）" },
-  { id: "電動B", label: "電動B（チャイルドシート付）" },
-  { id: "キッズ130以下", label: "キッズ（130cm以下）" },
-  { id: "キッズ130以上", label: "キッズ（130cm以上）" },
+  // キッズ
+  { id: "キッズ20インチ", label: "キッズ 20インチ（約115cm〜）" },
+  { id: "キッズ24インチ", label: "キッズ 24インチ（約130cm〜）" },
+  { id: "キッズ26インチ", label: "キッズ 26インチ（約140cm〜）" },
+  // クロスバイク
+  { id: "クロスバイク XS", label: "クロスバイク XS（150〜163cm）" },
+  { id: "クロスバイク S", label: "クロスバイク S（157〜170cm）" },
+  { id: "クロスバイク M", label: "クロスバイク M（165〜177cm）" },
+  { id: "クロスバイク XL", label: "クロスバイク XL（180〜195cm）" },
+  // ロードバイク
+  { id: "ロードバイク M", label: "ロードバイク M" },
+  { id: "ロードバイク L", label: "ロードバイク L" },
+  // 電動A（シティ）
+  { id: "電動A S", label: "電動A（シティ） S（146cm〜170cm）" },
+  { id: "電動A M", label: "電動A（シティ） M（153cm〜185cm前後）" },
+  // 電動B（スポーティ）
+  { id: "電動B M", label: "電動B（スポーティ） M（156cm〜180cm前後）" },
+  { id: "電動B チャイルドシート", label: "電動B（スポーティ） チャイルドシート付き" },
+  // 電動C（スポーツ）
+  { id: "電動C M", label: "電動C（スポーツ） M（170cm〜182cm前後）" },
+  { id: "電動C L", label: "電動C（スポーツ） L" },
 ] as const;
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
 
 const BIKE_GROUPS = [
   {
-    id: "cross",
-    title: "クロスバイク",
-    description: "軽快に走れるスタンダードモデル。身長に合わせてサイズをお選びください。",
-    types: ["クロスバイク S", "クロスバイク M", "クロスバイク L"],
-  },
-  {
-    id: "electricA",
-    title: "電動アシスト A",
-    description: "坂道やロングライドも楽な電動アシスト車です。",
-    types: ["電動A S", "電動A M", "電動A L"],
-  },
-  {
-    id: "electricB",
-    title: "電動アシスト B",
-    description: "チャイルドシート付きでお子さま同乗におすすめ。",
-    types: ["電動B"],
-  },
-  {
     id: "kids",
     title: "キッズバイク",
     description: "お子さまの身長に合わせてサイズをお選びください。",
-    types: ["キッズ130以下", "キッズ130以上"],
+    types: ["キッズ20インチ", "キッズ24インチ", "キッズ26インチ"],
+  },
+  {
+    id: "cross",
+    title: "クロスバイク",
+    description: "軽快に走れるスタンダードモデル。身長に合わせてサイズをお選びください。",
+    types: ["クロスバイク XS", "クロスバイク S", "クロスバイク M", "クロスバイク XL"],
+  },
+  {
+    id: "road",
+    title: "ロードバイク",
+    description: "スピード重視のロードバイク。",
+    types: ["ロードバイク M", "ロードバイク L"],
+  },
+  {
+    id: "electricA",
+    title: "電動アシスト A（シティ）",
+    description: "坂道やロングライドも楽な電動アシスト車です。",
+    types: ["電動A S", "電動A M"],
+  },
+  {
+    id: "electricB",
+    title: "電動アシスト B（スポーティ）",
+    description: "スポーティな電動アシスト車。チャイルドシート付きもご用意しています。",
+    types: ["電動B M", "電動B チャイルドシート"],
+  },
+  {
+    id: "electricC",
+    title: "電動アシスト C（スポーツ）",
+    description: "スポーツタイプの電動アシスト車。",
+    types: ["電動C M", "電動C L"],
   },
 ] satisfies Array<{ id: string; title: string; description: string; types: BikeType[] }>;
 
 const PRICE = {
   クロス: { "6h": 2500, "1d": 3500, "2d_plus": 6500, addDay: 2700 },
+  ロード: { "6h": 3000, "1d": 4000, "2d_plus": 7500, addDay: 3000 },
   電動A: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動B: { "6h": 4500, "1d": 5500, "2d_plus": 11000, addDay: 4500 },
+  電動C: { "6h": 7500, "1d": 8500, "2d_plus": 12000, addDay: 5000 },
   キッズ: { "6h": 500, "1d": 500, "2d_plus": 1000, addDay: 500 },
 };
 
 const ADDONS = [
   { id: "A-HOLDER", name: "スマホホルダー", price: 500 },
-  { id: "A-BATTERY", name: "予備バッテリー", price: 1000 },
+  { id: "A-BATTERY", name: "予備バッテリー", price: 2000 },
   { id: "A-CHILDSEAT", name: "チャイルドシート", price: 1000 },
-  { id: "A-CARRIER", name: "リアキャリア", price: 1500 },
+  { id: "A-PANNIER-SET", name: "パニアバッグ左右セット", price: 3000 },
+  { id: "A-PANNIER-SINGLE", name: "パニアバッグ片側", price: 2000 },
 ];
 
 const DROPOFF_PRICE = 3000;
@@ -127,6 +154,52 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
   inputBorder: string;
   accentText: string;
 }> = {
+  // キッズ
+  "キッズ20インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  "キッズ24インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  "キッズ26インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  // クロスバイク
+  "クロスバイク XS": {
+    headerBg: "bg-sky-50",
+    headerLabel: "text-sky-600",
+    headerText: "text-sky-900",
+    border: "border-sky-100",
+    ring: "ring-sky-100",
+    iconBg: "bg-sky-100",
+    iconColor: "text-sky-600",
+    inputBorder: "border-sky-200",
+    accentText: "text-sky-600",
+  },
   "クロスバイク S": {
     headerBg: "bg-sky-50",
     headerLabel: "text-sky-600",
@@ -149,7 +222,7 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-sky-200",
     accentText: "text-sky-600",
   },
-  "クロスバイク L": {
+  "クロスバイク XL": {
     headerBg: "bg-sky-50",
     headerLabel: "text-sky-600",
     headerText: "text-sky-900",
@@ -160,6 +233,30 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-sky-200",
     accentText: "text-sky-600",
   },
+  // ロードバイク
+  "ロードバイク M": {
+    headerBg: "bg-red-50",
+    headerLabel: "text-red-600",
+    headerText: "text-red-900",
+    border: "border-red-100",
+    ring: "ring-red-100",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    inputBorder: "border-red-200",
+    accentText: "text-red-600",
+  },
+  "ロードバイク L": {
+    headerBg: "bg-red-50",
+    headerLabel: "text-red-600",
+    headerText: "text-red-900",
+    border: "border-red-100",
+    ring: "ring-red-100",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    inputBorder: "border-red-200",
+    accentText: "text-red-600",
+  },
+  // 電動A（シティ）
   "電動A S": {
     headerBg: "bg-emerald-50",
     headerLabel: "text-emerald-600",
@@ -182,18 +279,8 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-emerald-200",
     accentText: "text-emerald-600",
   },
-  "電動A L": {
-    headerBg: "bg-emerald-50",
-    headerLabel: "text-emerald-600",
-    headerText: "text-emerald-900",
-    border: "border-emerald-100",
-    ring: "ring-emerald-100",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    inputBorder: "border-emerald-200",
-    accentText: "text-emerald-600",
-  },
-  電動B: {
+  // 電動B（スポーティ）
+  "電動B M": {
     headerBg: "bg-violet-50",
     headerLabel: "text-violet-600",
     headerText: "text-violet-900",
@@ -204,27 +291,39 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-violet-200",
     accentText: "text-violet-600",
   },
-  "キッズ130以下": {
-    headerBg: "bg-amber-50",
-    headerLabel: "text-amber-600",
-    headerText: "text-amber-900",
-    border: "border-amber-100",
-    ring: "ring-amber-100",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    inputBorder: "border-amber-200",
-    accentText: "text-amber-600",
+  "電動B チャイルドシート": {
+    headerBg: "bg-violet-50",
+    headerLabel: "text-violet-600",
+    headerText: "text-violet-900",
+    border: "border-violet-100",
+    ring: "ring-violet-100",
+    iconBg: "bg-violet-100",
+    iconColor: "text-violet-600",
+    inputBorder: "border-violet-200",
+    accentText: "text-violet-600",
   },
-  "キッズ130以上": {
-    headerBg: "bg-amber-50",
-    headerLabel: "text-amber-600",
-    headerText: "text-amber-900",
-    border: "border-amber-100",
-    ring: "ring-amber-100",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    inputBorder: "border-amber-200",
-    accentText: "text-amber-600",
+  // 電動C（スポーツ）
+  "電動C M": {
+    headerBg: "bg-indigo-50",
+    headerLabel: "text-indigo-600",
+    headerText: "text-indigo-900",
+    border: "border-indigo-100",
+    ring: "ring-indigo-100",
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-600",
+    inputBorder: "border-indigo-200",
+    accentText: "text-indigo-600",
+  },
+  "電動C L": {
+    headerBg: "bg-indigo-50",
+    headerLabel: "text-indigo-600",
+    headerText: "text-indigo-900",
+    border: "border-indigo-100",
+    ring: "ring-indigo-100",
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-600",
+    inputBorder: "border-indigo-200",
+    accentText: "text-indigo-600",
   },
 };
 
@@ -377,8 +476,10 @@ function calcReturnDate(date: string, plan: string, days: number) {
 
 function priceKeyOf(type: string) {
   if (type.startsWith("クロスバイク")) return "クロス";
+  if (type.startsWith("ロードバイク")) return "ロード";
   if (type.startsWith("電動A")) return "電動A";
-  if (type === "電動B") return "電動B";
+  if (type.startsWith("電動B")) return "電動B";
+  if (type.startsWith("電動C")) return "電動C";
   if (type.startsWith("キッズ")) return "キッズ";
   return "クロス";
 }
