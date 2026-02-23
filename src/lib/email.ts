@@ -22,15 +22,27 @@ export interface ReservationEmailData {
 }
 
 const BIKE_TYPE_LABELS: Record<string, string> = {
-  "クロスバイク S": "クロスバイク S（150〜165cm）",
-  "クロスバイク M": "クロスバイク M（165〜175cm）",
-  "クロスバイク L": "クロスバイク L（175〜185cm）",
-  "電動A S": "電動A S（150〜165cm）",
-  "電動A M": "電動A M（165〜175cm）",
-  "電動A L": "電動A L（175〜185cm）",
-  電動B: "電動B（チャイルドシート付）",
-  "キッズ130以下": "キッズ（130cm以下）",
-  "キッズ130以上": "キッズ（130cm以上）",
+  // キッズ
+  "キッズ20インチ": "キッズ 20インチ（約115cm〜）",
+  "キッズ24インチ": "キッズ 24インチ（約130cm〜）",
+  "キッズ26インチ": "キッズ 26インチ（約140cm〜）",
+  // クロスバイク
+  "クロスバイク XS": "クロスバイク XS（150〜163cm）",
+  "クロスバイク S": "クロスバイク S（157〜170cm）",
+  "クロスバイク M": "クロスバイク M（165〜177cm）",
+  "クロスバイク XL": "クロスバイク XL（180〜195cm）",
+  // ロードバイク
+  "ロードバイク M": "ロードバイク M",
+  "ロードバイク L": "ロードバイク L",
+  // 電動A（シティ）
+  "電動A S": "電動A（シティ） S（146cm〜170cm）",
+  "電動A M": "電動A（シティ） M（153cm〜185cm前後）",
+  // 電動B（スポーティ）
+  "電動B M": "電動B（スポーティ） M（156cm〜180cm前後）",
+  "電動B チャイルドシート": "電動B（スポーティ） チャイルドシート付き",
+  // 電動C（スポーツ）
+  "電動C M": "電動C（スポーツ） M（170cm〜182cm前後）",
+  "電動C L": "電動C（スポーツ） L",
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -56,7 +68,12 @@ const INSURANCE_DESCRIPTIONS: Record<string, string> = {
 export async function sendReservationConfirmationEmail(data: ReservationEmailData) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("RESEND_API_KEY is not set. Skipping email sending.");
+    console.error("❌ RESEND_API_KEY is not set. Skipping email sending.");
+    console.error("環境変数の確認:", {
+      hasResendApiKey: !!process.env.RESEND_API_KEY,
+      nodeEnv: process.env.NODE_ENV,
+      vercelUrl: process.env.VERCEL_URL,
+    });
     return { success: false, error: "Email service not configured" };
   }
 
@@ -116,8 +133,25 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
 
     const emailId = (response as { data?: { id?: string | null } | null })?.data?.id ?? null;
 
+    // 詳細なログ出力（Vercelで確認できるように）
+    console.log(`📧 メール送信成功:`, {
+      reservationId: data.reservationId,
+      email: data.email,
+      fromEmail,
+      emailId,
+      baseUrl,
+    });
+
     return { success: true, id: emailId };
   } catch (error: any) {
+    // 詳細なエラーログ出力
+    console.error(`📧 メール送信エラー:`, {
+      reservationId: data.reservationId,
+      email: data.email,
+      fromEmail,
+      error: error?.message || error,
+      errorStack: error?.stack,
+    });
     return { success: false, error: error?.message || "Failed to send email" };
   }
 }

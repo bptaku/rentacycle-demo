@@ -27,7 +27,8 @@ const ADDONS = [
   { id: "A-HOLDER", name: "スマホホルダー" },
   { id: "A-BATTERY", name: "予備バッテリー" },
   { id: "A-CHILDSEAT", name: "チャイルドシート" },
-  { id: "A-CARRIER", name: "リアキャリア" },
+  { id: "A-PANNIER-SET", name: "パニアバッグ左右セット" },
+  { id: "A-PANNIER-SINGLE", name: "パニアバッグ片側" },
 ];
 
 type Reservation = {

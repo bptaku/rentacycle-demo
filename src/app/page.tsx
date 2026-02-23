@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import AvailabilityChecker from "@/components/AvailabilityChecker";
 import {
   CalendarDays,
@@ -20,15 +21,27 @@ const CLOSE_TIME = "18:30";
 const CLOSED_DAY = 3; // 水曜
 
 const BIKE_TYPES = [
-  { id: "クロスバイク S", label: "クロスバイク S（150〜165cm）" },
-  { id: "クロスバイク M", label: "クロスバイク M（165〜175cm）" },
-  { id: "クロスバイク L", label: "クロスバイク L（175〜185cm）" },
-  { id: "電動A S", label: "電動A S（150〜165cm）" },
-  { id: "電動A M", label: "電動A M（165〜175cm）" },
-  { id: "電動A L", label: "電動A L（175〜185cm）" },
-  { id: "電動B", label: "電動B（チャイルドシート付）" },
-  { id: "キッズ130以下", label: "キッズ（130cm以下）" },
-  { id: "キッズ130以上", label: "キッズ（130cm以上）" },
+  // クロスバイク
+  { id: "クロスバイク XS", label: "クロスバイク XS（150〜163cm）" },
+  { id: "クロスバイク S", label: "クロスバイク S（157〜170cm）" },
+  { id: "クロスバイク M", label: "クロスバイク M（165〜177cm）" },
+  { id: "クロスバイク XL", label: "クロスバイク XL（180〜195cm）" },
+  // ロードバイク
+  { id: "ロードバイク M", label: "ロードバイク M" },
+  { id: "ロードバイク L", label: "ロードバイク L" },
+  // 電動A（シティ）
+  { id: "電動A S", label: "電動A（シティ） S（146cm〜170cm）" },
+  { id: "電動A M", label: "電動A（シティ） M（153cm〜185cm前後）" },
+  // 電動B（スポーティ）
+  { id: "電動B M", label: "電動B（スポーティ） M（156cm〜180cm前後）" },
+  { id: "電動B チャイルドシート", label: "電動B（スポーティ） チャイルドシート付き" },
+  // 電動C（スポーツ）
+  { id: "電動C M", label: "電動C（スポーツ） M（170cm〜182cm前後）" },
+  { id: "電動C L", label: "電動C（スポーツ） L" },
+  // キッズ
+  { id: "キッズ20インチ", label: "キッズ 20インチ（約115cm〜）" },
+  { id: "キッズ24インチ", label: "キッズ 24インチ（約130cm〜）" },
+  { id: "キッズ26インチ", label: "キッズ 26インチ（約140cm〜）" },
 ] as const;
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
 
@@ -37,43 +50,98 @@ const BIKE_GROUPS = [
     id: "cross",
     title: "クロスバイク",
     description: "軽快に走れるスタンダードモデル。身長に合わせてサイズをお選びください。",
-    types: ["クロスバイク S", "クロスバイク M", "クロスバイク L"],
+    types: ["クロスバイク XS", "クロスバイク S", "クロスバイク M", "クロスバイク XL"],
+  },
+  {
+    id: "road",
+    title: "ロードバイク",
+    description: "スピード重視のロードバイク。",
+    types: ["ロードバイク M", "ロードバイク L"],
   },
   {
     id: "electricA",
-    title: "電動アシスト A",
+    title: "電動アシスト A（シティ）",
     description: "坂道やロングライドも楽な電動アシスト車です。",
-    types: ["電動A S", "電動A M", "電動A L"],
+    types: ["電動A S", "電動A M"],
   },
   {
     id: "electricB",
-    title: "電動アシスト B",
-    description: "チャイルドシート付きでお子さま同乗におすすめ。",
-    types: ["電動B"],
+    title: "電動アシスト B（スポーティ）",
+    description: "スポーティな電動アシスト車。チャイルドシート付きもご用意しています。",
+    types: ["電動B M", "電動B チャイルドシート"],
+  },
+  {
+    id: "electricC",
+    title: "電動アシスト C（スポーツ）",
+    description: "スポーツタイプの電動アシスト車。",
+    types: ["電動C M", "電動C L"],
   },
   {
     id: "kids",
     title: "キッズバイク",
     description: "お子さまの身長に合わせてサイズをお選びください。",
-    types: ["キッズ130以下", "キッズ130以上"],
+    types: ["キッズ20インチ", "キッズ24インチ", "キッズ26インチ"],
   },
 ] satisfies Array<{ id: string; title: string; description: string; types: BikeType[] }>;
 
+/** 車種グループごとの写真一覧（public/bikepic 内・すべて表示） */
+const BIKE_GROUP_IMAGES: Record<string, string[]> = {
+  kids: [
+    "/bikepic/Kids/S__30064663.jpg",
+    "/bikepic/Kids/S__30064664.jpg",
+    "/bikepic/Kids/S__30064665.jpg",
+  ],
+  cross: [
+    "/bikepic/クロス/S__30064647.jpg",
+    "/bikepic/クロス/S__30064648.jpg",
+    "/bikepic/クロス/S__30064649.jpg",
+    "/bikepic/クロス/S__30064650.jpg",
+    "/bikepic/クロス/S__30064651.jpg",
+    "/bikepic/クロス/S__30064652.jpg",
+    "/bikepic/クロス/S__30064653.jpg",
+    "/bikepic/クロス/S__30064667.jpg",
+    "/bikepic/クロス/S__30064669.jpg",
+    "/bikepic/クロス/S__30064670.jpg",
+    "/bikepic/クロス/S__30064673.jpg",
+  ],
+  road: [
+    "/bikepic/Road bike/S__30064660.jpg",
+    "/bikepic/Road bike/S__30064661.jpg",
+    "/bikepic/Road bike/S__30064674.jpg",
+  ],
+  electricA: [
+    "/bikepic/電動A/S__30064654.jpg",
+    "/bikepic/電動A/S__30064655.jpg",
+    "/bikepic/電動A/S__30064656.jpg",
+    "/bikepic/電動A/S__30064658.jpg",
+    "/bikepic/電動A/S__30064659.jpg",
+  ],
+  electricB: [
+    "/bikepic/電動B/S__30064662.jpg",
+    "/bikepic/電動B/S__30064666.jpg",
+    "/bikepic/電動B/S__30064671.jpg",
+  ],
+  electricC: ["/bikepic/電動C/S__30064672.jpg"],
+};
+
 const PRICE = {
   クロス: { "6h": 2500, "1d": 3500, "2d_plus": 6500, addDay: 2700 },
+  ロード: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動A: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動B: { "6h": 4500, "1d": 5500, "2d_plus": 11000, addDay: 4500 },
+  電動C: { "6h": 7500, "1d": 8500, "2d_plus": 17000, addDay: 7500 },
   キッズ: { "6h": 500, "1d": 500, "2d_plus": 1000, addDay: 500 },
 };
 
 const ADDONS = [
   { id: "A-HOLDER", name: "スマホホルダー", price: 500 },
-  { id: "A-BATTERY", name: "予備バッテリー", price: 1000 },
+  { id: "A-BATTERY", name: "予備バッテリー", price: 2000 },
   { id: "A-CHILDSEAT", name: "チャイルドシート", price: 1000 },
-  { id: "A-CARRIER", name: "リアキャリア", price: 1500 },
+  { id: "A-PANNIER-SET", name: "パニアバッグ左右セット", price: 3000 },
+  { id: "A-PANNIER-SINGLE", name: "パニアバッグ片側", price: 2000 },
 ];
 
-const DROPOFF_PRICE = 3000;
+const DROPOFF_PRICE = 3850;
 
 const INSURANCE_PLANS = [
   { id: "none", name: "補償なし", price: 0, description: "補償は付帯しません" },
@@ -127,6 +195,52 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
   inputBorder: string;
   accentText: string;
 }> = {
+  // キッズ
+  "キッズ20インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  "キッズ24インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  "キッズ26インチ": {
+    headerBg: "bg-amber-50",
+    headerLabel: "text-amber-600",
+    headerText: "text-amber-900",
+    border: "border-amber-100",
+    ring: "ring-amber-100",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    inputBorder: "border-amber-200",
+    accentText: "text-amber-600",
+  },
+  // クロスバイク
+  "クロスバイク XS": {
+    headerBg: "bg-sky-50",
+    headerLabel: "text-sky-600",
+    headerText: "text-sky-900",
+    border: "border-sky-100",
+    ring: "ring-sky-100",
+    iconBg: "bg-sky-100",
+    iconColor: "text-sky-600",
+    inputBorder: "border-sky-200",
+    accentText: "text-sky-600",
+  },
   "クロスバイク S": {
     headerBg: "bg-sky-50",
     headerLabel: "text-sky-600",
@@ -149,7 +263,7 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-sky-200",
     accentText: "text-sky-600",
   },
-  "クロスバイク L": {
+  "クロスバイク XL": {
     headerBg: "bg-sky-50",
     headerLabel: "text-sky-600",
     headerText: "text-sky-900",
@@ -160,6 +274,30 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-sky-200",
     accentText: "text-sky-600",
   },
+  // ロードバイク
+  "ロードバイク M": {
+    headerBg: "bg-red-50",
+    headerLabel: "text-red-600",
+    headerText: "text-red-900",
+    border: "border-red-100",
+    ring: "ring-red-100",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    inputBorder: "border-red-200",
+    accentText: "text-red-600",
+  },
+  "ロードバイク L": {
+    headerBg: "bg-red-50",
+    headerLabel: "text-red-600",
+    headerText: "text-red-900",
+    border: "border-red-100",
+    ring: "ring-red-100",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    inputBorder: "border-red-200",
+    accentText: "text-red-600",
+  },
+  // 電動A（シティ）
   "電動A S": {
     headerBg: "bg-emerald-50",
     headerLabel: "text-emerald-600",
@@ -182,18 +320,8 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-emerald-200",
     accentText: "text-emerald-600",
   },
-  "電動A L": {
-    headerBg: "bg-emerald-50",
-    headerLabel: "text-emerald-600",
-    headerText: "text-emerald-900",
-    border: "border-emerald-100",
-    ring: "ring-emerald-100",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    inputBorder: "border-emerald-200",
-    accentText: "text-emerald-600",
-  },
-  電動B: {
+  // 電動B（スポーティ）
+  "電動B M": {
     headerBg: "bg-violet-50",
     headerLabel: "text-violet-600",
     headerText: "text-violet-900",
@@ -204,27 +332,39 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-violet-200",
     accentText: "text-violet-600",
   },
-  "キッズ130以下": {
-    headerBg: "bg-amber-50",
-    headerLabel: "text-amber-600",
-    headerText: "text-amber-900",
-    border: "border-amber-100",
-    ring: "ring-amber-100",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    inputBorder: "border-amber-200",
-    accentText: "text-amber-600",
+  "電動B チャイルドシート": {
+    headerBg: "bg-violet-50",
+    headerLabel: "text-violet-600",
+    headerText: "text-violet-900",
+    border: "border-violet-100",
+    ring: "ring-violet-100",
+    iconBg: "bg-violet-100",
+    iconColor: "text-violet-600",
+    inputBorder: "border-violet-200",
+    accentText: "text-violet-600",
   },
-  "キッズ130以上": {
-    headerBg: "bg-amber-50",
-    headerLabel: "text-amber-600",
-    headerText: "text-amber-900",
-    border: "border-amber-100",
-    ring: "ring-amber-100",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    inputBorder: "border-amber-200",
-    accentText: "text-amber-600",
+  // 電動C（スポーツ）
+  "電動C M": {
+    headerBg: "bg-indigo-50",
+    headerLabel: "text-indigo-600",
+    headerText: "text-indigo-900",
+    border: "border-indigo-100",
+    ring: "ring-indigo-100",
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-600",
+    inputBorder: "border-indigo-200",
+    accentText: "text-indigo-600",
+  },
+  "電動C L": {
+    headerBg: "bg-indigo-50",
+    headerLabel: "text-indigo-600",
+    headerText: "text-indigo-900",
+    border: "border-indigo-100",
+    ring: "ring-indigo-100",
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-600",
+    inputBorder: "border-indigo-200",
+    accentText: "text-indigo-600",
   },
 };
 
@@ -377,8 +517,10 @@ function calcReturnDate(date: string, plan: string, days: number) {
 
 function priceKeyOf(type: string) {
   if (type.startsWith("クロスバイク")) return "クロス";
+  if (type.startsWith("ロードバイク")) return "ロード";
   if (type.startsWith("電動A")) return "電動A";
-  if (type === "電動B") return "電動B";
+  if (type.startsWith("電動B")) return "電動B";
+  if (type.startsWith("電動C")) return "電動C";
   if (type.startsWith("キッズ")) return "キッズ";
   return "クロス";
 }
@@ -432,9 +574,12 @@ export default function RentacyclePageV5() {
   type AddonsByBike = Partial<Record<BikeType, Array<Partial<Record<string, number>>>>>;
   const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
 
-  const setQtySafe = (bikeId: string, value: number) => {
+  const setQtySafe = (bikeId: string, value: number, max?: number) => {
     const numeric = Number.isFinite(value) ? value : 0;
-    const safeValue = Math.max(0, Math.floor(numeric));
+    let safeValue = Math.max(0, Math.floor(numeric));
+    if (max != null && Number.isFinite(max)) {
+      safeValue = Math.min(safeValue, max);
+    }
     setQty((prev) => ({ ...prev, [bikeId]: safeValue }));
   };
 
@@ -594,17 +739,16 @@ export default function RentacyclePageV5() {
         ? selectedInsurance.price * rentalDays * totalBikes
         : 0;
 
-    const baseTotal = subtotal + addonsTotal + dropoffPrice + insurancePrice;
     const eligible = adultCount >= 3 && (plan === "1d" || plan === "2d_plus");
-    const discount = eligible ? Math.floor(baseTotal * 0.1) : 0;
-    const discounted = baseTotal - discount;
+    const discount = eligible ? Math.floor(subtotal * 0.1) : 0;
+    const totalPriceAfterDiscount = (subtotal - discount) + addonsTotal + dropoffPrice + insurancePrice;
 
     return {
       subtotal,
       addons: addonsTotal,
       dropoffPrice,
       insurancePrice,
-      totalPrice: discounted,
+      totalPrice: totalPriceAfterDiscount,
       discount,
       discountLabel: eligible ? "グループ割 10%OFF 適用" : "",
     };
@@ -851,15 +995,14 @@ export default function RentacyclePageV5() {
                 const priceKey = priceKeyOf(primaryType) as keyof typeof PRICE;
                 const priceTable = PRICE[priceKey];
 
+                const groupImages = BIKE_GROUP_IMAGES[group.id] ?? [];
                 return (
                   <div key={group.id} className="space-y-5 rounded-3xl border border-slate-100 bg-slate-50/60 p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
-                      <div>
+                    <div className="flex flex-col gap-4">
+                      <div className="min-w-0 space-y-2">
                         <h3 className="text-lg font-semibold text-slate-900">{group.title}</h3>
                         <p className="text-xs text-slate-500">{group.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-xs text-slate-600">
+                        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-xs text-slate-600">
                       <span className="font-semibold text-slate-500">料金の目安</span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
                         6時間：<span className="font-semibold text-slate-800">¥{priceTable["6h"].toLocaleString()}</span>
@@ -871,6 +1014,31 @@ export default function RentacyclePageV5() {
                         2日以上：<span className="font-semibold text-slate-800">¥{priceTable["2d_plus"].toLocaleString()}</span>
                       </span>
                       <span className="text-[11px] text-slate-400">追加1日ごとに +¥{priceTable.addDay.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {groupImages.length > 0 && (
+                        <div className="w-full overflow-x-auto overflow-y-hidden scroll-smooth">
+                          {groupImages.length > 3 && (
+                            <p className="mb-1 text-[11px] text-slate-400">← 左右にスクロールで写真をすべてご覧いただけます</p>
+                          )}
+                          <div className="flex gap-3 pb-2" style={{ width: "max-content", minWidth: "100%" }}>
+                            {groupImages.map((src, i) => (
+                              <div
+                                key={src}
+                                className="relative h-36 w-48 shrink-0 overflow-hidden rounded-2xl bg-slate-200"
+                              >
+                                <Image
+                                  src={src}
+                                  alt={`${group.title}（${i + 1}枚目）`}
+                                  fill
+                                  className="object-cover"
+                                  sizes="192px"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="grid gap-4 lg:grid-cols-2">
                       {groupTypes.map((bike) => {
@@ -905,7 +1073,6 @@ export default function RentacyclePageV5() {
                               />
                             </div>
                             <div className="space-y-5 p-5">
-                              <p className="text-xs text-slate-500">予約後に残る台数を確認しながら台数を調整できます。</p>
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
                                   <span className="text-xs font-medium uppercase tracking-wide text-slate-500">空き台数</span>
@@ -913,20 +1080,19 @@ export default function RentacyclePageV5() {
                                     <span className={`text-3xl font-semibold ${shortage ? "text-red-500" : style.accentText}`}>{projectedDisplay}</span>
                                     <span className="text-sm text-slate-400">台</span>
                                   </div>
-                                  <p className="text-xs text-slate-500">ご予約確定時に残る目安の台数です。</p>
                                 </div>
                                 <div className={`flex flex-col gap-3 rounded-2xl border ${style.inputBorder} bg-white p-5`}>
                                   <label className="text-xs font-medium uppercase tracking-wide text-slate-500">予約したい台数</label>
                                   <input
                                     type="number"
                                     min={0}
+                                    max={available}
                                     data-availability-pause
                                     className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-right text-2xl font-semibold text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                                     value={qty[bike.id]}
-                                    onChange={(e) => setQtySafe(bike.id, Number(e.target.value))}
+                                    onChange={(e) => setQtySafe(bike.id, Number(e.target.value), available)}
                                     disabled={available <= 0}
                                   />
-                                  <p className="text-xs text-slate-500">ご希望の台数をご入力ください。空きが不足するとお知らせします。</p>
                                 </div>
                               </div>
                               {shortage && (
@@ -1071,6 +1237,9 @@ export default function RentacyclePageV5() {
                 </div>
                 <p className="text-[11px] text-slate-400">
                   ※貸出時と異なる重大な破損が確認された場合、補償内容に応じて修理費等を請求いたします。
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  ※全てのレンタル自転車に上限１億円までの対人賠償保険を付帯しております。
                 </p>
               </div>
             </div>
