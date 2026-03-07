@@ -127,6 +127,8 @@ async function withResendRetry<T>(
   }
   throw lastError;
 }
+
+export async function sendReservationConfirmationEmail(data: ReservationEmailData) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error("❌ RESEND_API_KEY is not set. Skipping email sending.");
