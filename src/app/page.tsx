@@ -2,7 +2,9 @@
 
 import { useMemo, useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import AvailabilityChecker from "@/components/AvailabilityChecker";
+import LocaleDatePicker from "@/components/LocaleDatePicker";
 import {
   CalendarDays,
   Clock,
@@ -12,6 +14,18 @@ import {
   ChevronRight,
   CheckCircle2,
 } from "lucide-react";
+import {
+  type ReservationLocale,
+  getReservationTranslations,
+  getPlanDetails,
+  getPlanLabels,
+  getBikeGroups,
+  getBikeTypeLabels,
+  getAddonNames,
+  getInsurancePlans,
+  interpolate,
+  getWeekdayShort,
+} from "@/lib/reservation-i18n";
 
 /* =========================================================
    定義
@@ -27,17 +41,18 @@ const BIKE_TYPES = [
   { id: "クロスバイク M", label: "クロスバイク M（165〜177cm）" },
   { id: "クロスバイク XL", label: "クロスバイク XL（180〜195cm）" },
   // ロードバイク
-  { id: "ロードバイク M", label: "ロードバイク M" },
-  { id: "ロードバイク L", label: "ロードバイク L" },
-  // 電動A（シティ）
-  { id: "電動A S", label: "電動A（シティ） S（146cm〜170cm）" },
-  { id: "電動A M", label: "電動A（シティ） M（153cm〜185cm前後）" },
-  // 電動B（スポーティ）
-  { id: "電動B M", label: "電動B（スポーティ） M（156cm〜180cm前後）" },
-  { id: "電動B チャイルドシート", label: "電動B（スポーティ） チャイルドシート付き" },
-  // 電動C（スポーツ）
-  { id: "電動C M", label: "電動C（スポーツ） M（170cm〜182cm前後）" },
-  { id: "電動C L", label: "電動C（スポーツ） L" },
+  { id: "ロードバイク S", label: "ロードバイク S（165〜172cm）" },
+  { id: "ロードバイク M", label: "ロードバイク M（170〜180cm）" },
+  { id: "ロードバイク L", label: "ロードバイク L（177〜193cm）" },
+  // 電動A
+  { id: "電動A S", label: "電動A S（146cm〜170cm）" },
+  { id: "電動A M", label: "電動A M（153cm〜185cm）" },
+  // 電動B
+  { id: "電動B M", label: "電動B M（156cm〜180cm）" },
+  { id: "電動B チャイルドシート", label: "電動B チャイルドシート付き" },
+  // 電動C
+  { id: "電動C S", label: "電動C S（162〜172cm）" },
+  { id: "電動C M", label: "電動C M（170〜182cm）" },
   // キッズ
   { id: "キッズ20インチ", label: "キッズ 20インチ（約115cm〜）" },
   { id: "キッズ24インチ", label: "キッズ 24インチ（約130cm〜）" },
@@ -45,44 +60,32 @@ const BIKE_TYPES = [
 ] as const;
 type BikeType = (typeof BIKE_TYPES)[number]["id"];
 
-const BIKE_GROUPS = [
+const BIKE_GROUPS_BASE = [
   {
     id: "cross",
-    title: "クロスバイク",
-    description: "軽快に走れるスタンダードモデル。身長に合わせてサイズをお選びください。",
     types: ["クロスバイク XS", "クロスバイク S", "クロスバイク M", "クロスバイク XL"],
   },
   {
     id: "road",
-    title: "ロードバイク",
-    description: "スピード重視のロードバイク。",
-    types: ["ロードバイク M", "ロードバイク L"],
+    types: ["ロードバイク S", "ロードバイク M", "ロードバイク L"],
   },
   {
     id: "electricA",
-    title: "電動アシスト A（シティ）",
-    description: "坂道やロングライドも楽な電動アシスト車です。",
     types: ["電動A S", "電動A M"],
   },
   {
     id: "electricB",
-    title: "電動アシスト B（スポーティ）",
-    description: "スポーティな電動アシスト車。チャイルドシート付きもご用意しています。",
     types: ["電動B M", "電動B チャイルドシート"],
   },
   {
     id: "electricC",
-    title: "電動アシスト C（スポーツ）",
-    description: "スポーツタイプの電動アシスト車。",
-    types: ["電動C M", "電動C L"],
+    types: ["電動C S", "電動C M"],
   },
   {
     id: "kids",
-    title: "キッズバイク",
-    description: "お子さまの身長に合わせてサイズをお選びください。",
     types: ["キッズ20インチ", "キッズ24インチ", "キッズ26インチ"],
   },
-] satisfies Array<{ id: string; title: string; description: string; types: BikeType[] }>;
+] as const;
 
 /** 車種グループごとの写真一覧（public/bikepic 内・すべて表示） */
 const BIKE_GROUP_IMAGES: Record<string, string[]> = {
@@ -134,55 +137,56 @@ const PRICE = {
 };
 
 const ADDONS = [
-  { id: "A-HOLDER", name: "スマホホルダー", price: 500 },
-  { id: "A-BATTERY", name: "予備バッテリー", price: 2000 },
-  { id: "A-CHILDSEAT", name: "チャイルドシート", price: 1000 },
-  { id: "A-PANNIER-SET", name: "パニアバッグ左右セット", price: 3000 },
-  { id: "A-PANNIER-SINGLE", name: "パニアバッグ片側", price: 2000 },
+  { id: "A-HOLDER", price: 500 },
+  { id: "A-BATTERY", price: 2000 },
+  { id: "A-PANNIER-SET", price: 3000 },
+  { id: "A-PANNIER-SINGLE", price: 2000 },
 ];
+
+/** パニアバッグ（左右セット・片側の合計）の予約上限 */
+const MAX_PANNIER = 10;
+
+/** 車種ごとに選択可能なオプション（予備バッテリーは電動Aのみ、パニアはクロスXS除く・電動ABCのみ） */
+function getAddonsForBikeType(bikeTypeId: string) {
+  const isPannierAvailable =
+    (bikeTypeId.startsWith("クロスバイク") && bikeTypeId !== "クロスバイク XS") ||
+    bikeTypeId.startsWith("電動A") ||
+    bikeTypeId.startsWith("電動B") ||
+    bikeTypeId.startsWith("電動C");
+
+  return ADDONS.filter((addon) => {
+    if (addon.id === "A-BATTERY") {
+      return bikeTypeId === "電動A S" || bikeTypeId === "電動A M";
+    }
+    if (addon.id === "A-PANNIER-SET" || addon.id === "A-PANNIER-SINGLE") {
+      return isPannierAvailable;
+    }
+    return true;
+  });
+}
+
+/** 現在のパニアバッグ予約数（片側=1、左右セット=2としてカウント、最大10） */
+function countPannier(addonsByBike: Record<string, Array<Partial<Record<string, number>>> | undefined>): number {
+  let n = 0;
+  for (const addonSets of Object.values(addonsByBike || {})) {
+    if (!Array.isArray(addonSets)) continue;
+    for (const set of addonSets) {
+      if (!set) continue;
+      n += ((set["A-PANNIER-SET"] ?? 0) * 2) + (set["A-PANNIER-SINGLE"] ?? 0);
+    }
+  }
+  return n;
+}
 
 const DROPOFF_PRICE = 3850;
 
-const INSURANCE_PLANS = [
-  { id: "none", name: "補償なし", price: 0, description: "補償は付帯しません" },
-  { id: "A", name: "Aプラン", price: 500, description: "1万円までの修理代を保障" },
-  { id: "B", name: "Bプラン", price: 1000, description: "車両価格の30%まで保障" },
-  { id: "C", name: "Cプラン", price: 2000, description: "車両価格の50%まで保障" },
+const INSURANCE_PLANS_BASE = [
+  { id: "none", price: 0 },
+  { id: "A", price: 500 },
+  { id: "B", price: 1000 },
+  { id: "C", price: 2000 },
 ] as const;
-const PLAN_DETAILS: Array<{
-  id: "6h" | "1d" | "2d_plus";
-  title: string;
-  subtitle: string;
-  note?: string;
-}> = [
-  {
-    id: "6h",
-    title: "6時間プラン",
-    subtitle: "半日で向島・しまなみ海道を満喫したい方に",
-    note: "ご出発は 8:00 / 8:30 / 9:00 からお選びいただけます",
-  },
-  {
-    id: "1d",
-    title: "1日プラン",
-    subtitle: "朝から夕方まで自由にサイクリング",
-  },
-  {
-    id: "2d_plus",
-    title: "2日以上プラン",
-    subtitle: "泊まりがけ・ロングライドにおすすめ",
-    note: "2日目以降は1日ごとに追加料金が発生します",
-  },
-];
-const PLAN_LABELS: Record<"6h" | "1d" | "2d_plus", string> = {
-  "6h": "6時間プラン",
-  "1d": "1日プラン",
-  "2d_plus": "2日以上プラン",
-};
-const INSURANCE_PLAN_LABELS: Record<InsurancePlanId, string> = INSURANCE_PLANS.reduce(
-  (acc, plan) => ({ ...acc, [plan.id]: plan.name }),
-  {} as Record<InsurancePlanId, string>
-);
-type InsurancePlanId = (typeof INSURANCE_PLANS)[number]["id"];
+type InsurancePlanId = (typeof INSURANCE_PLANS_BASE)[number]["id"];
 
 const BIKE_TYPE_STYLES: Record<BikeType, {
   headerBg: string;
@@ -231,50 +235,61 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
   },
   // クロスバイク
   "クロスバイク XS": {
-    headerBg: "bg-sky-50",
-    headerLabel: "text-sky-600",
-    headerText: "text-sky-900",
-    border: "border-sky-100",
-    ring: "ring-sky-100",
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
-    inputBorder: "border-sky-200",
-    accentText: "text-sky-600",
+    headerBg: "bg-emerald-50",
+    headerLabel: "text-emerald-600",
+    headerText: "text-emerald-900",
+    border: "border-emerald-100",
+    ring: "ring-emerald-100",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    inputBorder: "border-emerald-200",
+    accentText: "text-emerald-600",
   },
   "クロスバイク S": {
-    headerBg: "bg-sky-50",
-    headerLabel: "text-sky-600",
-    headerText: "text-sky-900",
-    border: "border-sky-100",
-    ring: "ring-sky-100",
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
-    inputBorder: "border-sky-200",
-    accentText: "text-sky-600",
+    headerBg: "bg-emerald-50",
+    headerLabel: "text-emerald-600",
+    headerText: "text-emerald-900",
+    border: "border-emerald-100",
+    ring: "ring-emerald-100",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    inputBorder: "border-emerald-200",
+    accentText: "text-emerald-600",
   },
   "クロスバイク M": {
-    headerBg: "bg-sky-50",
-    headerLabel: "text-sky-600",
-    headerText: "text-sky-900",
-    border: "border-sky-100",
-    ring: "ring-sky-100",
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
-    inputBorder: "border-sky-200",
-    accentText: "text-sky-600",
+    headerBg: "bg-emerald-50",
+    headerLabel: "text-emerald-600",
+    headerText: "text-emerald-900",
+    border: "border-emerald-100",
+    ring: "ring-emerald-100",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    inputBorder: "border-emerald-200",
+    accentText: "text-emerald-600",
   },
   "クロスバイク XL": {
-    headerBg: "bg-sky-50",
-    headerLabel: "text-sky-600",
-    headerText: "text-sky-900",
-    border: "border-sky-100",
-    ring: "ring-sky-100",
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
-    inputBorder: "border-sky-200",
-    accentText: "text-sky-600",
+    headerBg: "bg-emerald-50",
+    headerLabel: "text-emerald-600",
+    headerText: "text-emerald-900",
+    border: "border-emerald-100",
+    ring: "ring-emerald-100",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    inputBorder: "border-emerald-200",
+    accentText: "text-emerald-600",
   },
   // ロードバイク
+  "ロードバイク S": {
+    headerBg: "bg-red-50",
+    headerLabel: "text-red-600",
+    headerText: "text-red-900",
+    border: "border-red-100",
+    ring: "ring-red-100",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    inputBorder: "border-red-200",
+    accentText: "text-red-600",
+  },
   "ロードバイク M": {
     headerBg: "bg-red-50",
     headerLabel: "text-red-600",
@@ -297,30 +312,30 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-red-200",
     accentText: "text-red-600",
   },
-  // 電動A（シティ）
+  // 電動A（青系でB/Cとトーンを揃える）
   "電動A S": {
-    headerBg: "bg-emerald-50",
-    headerLabel: "text-emerald-600",
-    headerText: "text-emerald-900",
-    border: "border-emerald-100",
-    ring: "ring-emerald-100",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    inputBorder: "border-emerald-200",
-    accentText: "text-emerald-600",
+    headerBg: "bg-blue-50",
+    headerLabel: "text-blue-600",
+    headerText: "text-blue-900",
+    border: "border-blue-100",
+    ring: "ring-blue-100",
+    iconBg: "bg-blue-100",
+    iconColor: "text-blue-600",
+    inputBorder: "border-blue-200",
+    accentText: "text-blue-600",
   },
   "電動A M": {
-    headerBg: "bg-emerald-50",
-    headerLabel: "text-emerald-600",
-    headerText: "text-emerald-900",
-    border: "border-emerald-100",
-    ring: "ring-emerald-100",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    inputBorder: "border-emerald-200",
-    accentText: "text-emerald-600",
+    headerBg: "bg-blue-50",
+    headerLabel: "text-blue-600",
+    headerText: "text-blue-900",
+    border: "border-blue-100",
+    ring: "ring-blue-100",
+    iconBg: "bg-blue-100",
+    iconColor: "text-blue-600",
+    inputBorder: "border-blue-200",
+    accentText: "text-blue-600",
   },
-  // 電動B（スポーティ）
+  // 電動B
   "電動B M": {
     headerBg: "bg-violet-50",
     headerLabel: "text-violet-600",
@@ -343,8 +358,8 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-violet-200",
     accentText: "text-violet-600",
   },
-  // 電動C（スポーツ）
-  "電動C M": {
+  // 電動C
+  "電動C S": {
     headerBg: "bg-indigo-50",
     headerLabel: "text-indigo-600",
     headerText: "text-indigo-900",
@@ -355,7 +370,7 @@ const BIKE_TYPE_STYLES: Record<BikeType, {
     inputBorder: "border-indigo-200",
     accentText: "text-indigo-600",
   },
-  "電動C L": {
+  "電動C M": {
     headerBg: "bg-indigo-50",
     headerLabel: "text-indigo-600",
     headerText: "text-indigo-900",
@@ -549,7 +564,26 @@ type ReservationSummary = {
   totalPrice: number;
 };
 
-export default function RentacyclePageV5() {
+export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale?: ReservationLocale }) {
+  const locale = localeProp;
+  const t = getReservationTranslations(locale);
+  const planDetails = getPlanDetails(locale);
+  const planLabels = getPlanLabels(locale);
+  const bikeGroups = getBikeGroups(locale);
+  const bikeLabels = getBikeTypeLabels(locale);
+  const addonNames = getAddonNames(locale);
+  const insurancePlansWithLabels = getInsurancePlans(locale);
+
+  // ネイティブ日付ピッカー（カレンダー）の表示言語を locale に合わせる
+  useEffect(() => {
+    const html = document.documentElement;
+    const prev = html.getAttribute("lang");
+    html.setAttribute("lang", locale === "en" ? "en" : "ja");
+    return () => {
+      if (prev) html.setAttribute("lang", prev);
+      else html.removeAttribute("lang");
+    };
+  }, [locale]);
   const [plan, setPlan] = useState<"6h" | "1d" | "2d_plus" | "">("");
   const [days, setDays] = useState(2);
   const [date, setDate] = useState("");
@@ -573,6 +607,7 @@ export default function RentacyclePageV5() {
 
   type AddonsByBike = Partial<Record<BikeType, Array<Partial<Record<string, number>>>>>;
   const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
+  const [maxPannierAvailable, setMaxPannierAvailable] = useState(MAX_PANNIER);
 
   const setQtySafe = (bikeId: string, value: number, max?: number) => {
     const numeric = Number.isFinite(value) ? value : 0;
@@ -669,6 +704,31 @@ export default function RentacyclePageV5() {
     };
   }, [plan, date]);
 
+  useEffect(() => {
+    if (!plan || !date) {
+      setMaxPannierAvailable(MAX_PANNIER);
+      return;
+    }
+    const returnDate = calcReturnDate(date, plan, days);
+    const end_date = returnDate ? formatDateKey(returnDate) : date;
+    let cancelled = false;
+    fetch(`/api/pannier-availability?start_date=${encodeURIComponent(date)}&end_date=${encodeURIComponent(end_date)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.status === "ok" && typeof data.maxPannierCanAdd === "number") {
+          setMaxPannierAvailable(data.maxPannierCanAdd);
+        } else if (!cancelled) {
+          setMaxPannierAvailable(MAX_PANNIER);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMaxPannierAvailable(MAX_PANNIER);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [plan, date, days]);
+
   const weekday = getWeekday(date);
   const returnDate = calcReturnDate(date, plan, days);
   const returnWeekday = returnDate ? returnDate.getDay() : -1;
@@ -733,7 +793,7 @@ export default function RentacyclePageV5() {
 
     const dropoffPrice = dropoff ? DROPOFF_PRICE * totalBikes : 0;
 
-    const selectedInsurance = INSURANCE_PLANS.find((p) => p.id === insurancePlan);
+    const selectedInsurance = insurancePlansWithLabels.find((p) => p.id === insurancePlan);
     const insurancePrice =
       selectedInsurance && insurancePlan !== "none" && totalBikes > 0
         ? selectedInsurance.price * rentalDays * totalBikes
@@ -750,10 +810,11 @@ export default function RentacyclePageV5() {
       insurancePrice,
       totalPrice: totalPriceAfterDiscount,
       discount,
-      discountLabel: eligible ? "グループ割 10%OFF 適用" : "",
+      discountLabel: eligible ? t.groupDiscountLabel : "",
     };
-  }, [plan, qty, addonsByBike, dropoff, insurancePlan, totalBikes, rentalDays, adultCount]);
+  }, [plan, qty, addonsByBike, dropoff, insurancePlan, totalBikes, rentalDays, adultCount, t]);
 
+  const pannierCount = countPannier(addonsByBike);
   const isBookingDisabled =
     isClosed ||
     isReturnClosed ||
@@ -761,27 +822,28 @@ export default function RentacyclePageV5() {
     totalBikes === 0 ||
     (plan === "6h" && isThreeDayWeekendBlocked) ||
     !customerName.trim() ||
-    !isEmailValid;
+    !isEmailValid ||
+    pannierCount > maxPannierAvailable;
 
   const closureMessage = useMemo(() => {
     if (!plan || !date) return "";
     if (plan === "6h" || plan === "1d") {
       if (isClosed || isReturnClosed) {
-        return "定休日（水曜）は予約できません。";
+        return t.closedMessageSingle;
       }
       return "";
     }
     if (isClosed && isReturnClosed) {
-      return "貸出日と返却日が定休日（水曜）に当たるためご利用いただけません";
+      return t.closedMessageBoth;
     }
     if (isClosed) {
-      return "貸出日が定休日（水曜）に当たるためご利用いただけません";
+      return t.closedMessageStart;
     }
     if (isReturnClosed) {
-      return "返却日が定休日（水曜）に当たるためご利用いただけません";
+      return t.closedMessageEnd;
     }
     return "";
-  }, [plan, date, isClosed, isReturnClosed]);
+  }, [plan, date, isClosed, isReturnClosed, t]);
 
   const handleDateChange = useCallback(
     (value: string) => {
@@ -810,14 +872,27 @@ export default function RentacyclePageV5() {
     <div className="min-h-screen bg-slate-50/70">
       <div className="mx-auto max-w-5xl px-6 py-12 space-y-8">
         <header className="px-1 py-6 sm:py-8">
-          <div className="space-y-3 text-center md:text-left">
-            <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
-              <span className="h-px w-8 bg-slate-300" /> 木曽サイクル
-            </span>
-            <h1 className="text-3xl font-semibold text-slate-900 sm:text-[2.5rem]">レンタサイクル予約フォーム</h1>
-            <p className="text-sm text-slate-500 sm:text-base">
-              ご利用日時・車種・オプションを選択し、予約内容をご確認ください。
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-3 text-center md:text-left">
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
+                <span className="h-px w-8 bg-slate-300" /> {t.shopName}
+              </span>
+              <h1 className="text-3xl font-semibold text-slate-900 sm:text-[2.5rem]">{t.title}</h1>
+              <p className="text-sm text-slate-500 sm:text-base">
+                {t.subtitle}
+              </p>
+            </div>
+            <div className="flex justify-center sm:justify-end">
+              {locale === "ja" ? (
+                <Link href="/en" className="text-sm font-medium text-slate-600 hover:text-slate-900 underline">
+                  English
+                </Link>
+              ) : (
+                <Link href="/" className="text-sm font-medium text-slate-600 hover:text-slate-900 underline">
+                  日本語
+                </Link>
+              )}
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -826,7 +901,7 @@ export default function RentacyclePageV5() {
                 <Clock className="h-4 w-4" />
               </span>
               <div className="text-left">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">営業時間</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.hoursLabel}</p>
                 <p className="text-sm font-semibold text-slate-900">
                   {OPEN_TIME} 〜 {CLOSE_TIME}
                 </p>
@@ -837,8 +912,8 @@ export default function RentacyclePageV5() {
                 <CalendarDays className="h-4 w-4" />
               </span>
               <div className="text-left">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">定休日</p>
-                <p className="text-sm font-semibold text-slate-900">水曜日</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.closedLabel}</p>
+                <p className="text-sm font-semibold text-slate-900">{t.closedWeekday}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -846,8 +921,8 @@ export default function RentacyclePageV5() {
                 <MapPin className="h-4 w-4" />
               </span>
               <div className="text-left">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ドロップオフ</p>
-                <p className="text-sm font-semibold text-slate-900">今治で返却可能（繁忙期除く）</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.dropoffLabel}</p>
+                <p className="text-sm font-semibold text-slate-900">{t.dropoffNote}</p>
               </div>
             </div>
           </div>
@@ -856,11 +931,11 @@ export default function RentacyclePageV5() {
         <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">STEP 01</span>
-            <h2 className="text-xl font-semibold text-slate-900">プランを選ぶ</h2>
-            <p className="text-sm text-slate-500">ご利用予定の時間帯・日数にあわせてプランをお選びください。</p>
+            <h2 className="text-xl font-semibold text-slate-900">{t.step1Title}</h2>
+            <p className="text-sm text-slate-500">{t.step1Desc}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            {PLAN_DETAILS.map((planOption) => {
+            {planDetails.map((planOption) => {
               const isActive = plan === planOption.id;
               return (
                 <label
@@ -884,7 +959,7 @@ export default function RentacyclePageV5() {
                       isActive ? "text-blue-600" : "text-slate-400"
                     }`}
                   >
-                    選択する <ChevronRight className="h-3.5 w-3.5" />
+                    {t.selectPlan} <ChevronRight className="h-3.5 w-3.5" />
                   </span>
                 </label>
               );
@@ -896,26 +971,26 @@ export default function RentacyclePageV5() {
           <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">STEP 02</span>
-              <h2 className="text-xl font-semibold text-slate-900">日時を選ぶ</h2>
+              <h2 className="text-xl font-semibold text-slate-900">{t.step2Title}</h2>
               <p className="text-sm text-slate-500">
-                出発日と来店時間を選ぶと、空き状況が自動的に更新されます。
+                {t.step2Desc}
               </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  <CalendarDays className="h-3.5 w-3.5" /> 貸出日
+                  <CalendarDays className="h-3.5 w-3.5" /> {t.pickupDate}
                 </span>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+                <LocaleDatePicker
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(value) => handleDateChange(value)}
+                  locale={locale}
+                  className="w-full"
                 />
                 {plan === "2d_plus" && (
                   <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                    <span className="text-slate-500">ご利用日数</span>
+                    <span className="text-slate-500">{t.rentalDays}</span>
                     <input
                       type="number"
                       min={2}
@@ -926,19 +1001,19 @@ export default function RentacyclePageV5() {
                   </div>
                 )}
                 {plan === "6h" && isThreeDayWeekendBlocked && (
-                  <p className="text-xs text-red-500">※繁忙期の三連休は6時間プランの予約ができません</p>
+                  <p className="text-xs text-red-500">{t.busyThreeDayNote}</p>
                 )}
                 {returnDate && plan !== "6h" && (
-                  <p className="text-xs text-slate-500">返却予定日：{returnDate.toLocaleDateString()}（{"日月火水木金土"[returnWeekday]}）</p>
+                  <p className="text-xs text-slate-500">{t.returnDate}：{returnDate.toLocaleDateString()}（{getWeekdayShort(locale, returnWeekday)}）</p>
                 )}
                 {plan === "6h" && (
-                  <p className="text-xs text-slate-500">返却予定：{addHours(startTime, 6)}（最終返却 {CLOSE_TIME}）</p>
+                  <p className="text-xs text-slate-500">{t.returnTime}：{addHours(startTime, 6)}（{t.returnBy} {CLOSE_TIME}）</p>
                 )}
               </div>
 
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  <Clock className="h-3.5 w-3.5" /> 来店時間
+                  <Clock className="h-3.5 w-3.5" /> {t.pickupTime}
                 </span>
                 {plan === "6h" ? (
                   <select
@@ -946,8 +1021,8 @@ export default function RentacyclePageV5() {
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                   >
-                    {generateSixHourStartTimes().map((t) => (
-                      <option key={t}>{t}</option>
+                    {generateSixHourStartTimes().map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
                     ))}
                   </select>
                 ) : (
@@ -956,13 +1031,13 @@ export default function RentacyclePageV5() {
                     value={pickupTime}
                     onChange={(e) => setPickupTime(e.target.value)}
                   >
-                    {generateBusinessSlots().map((t) => (
-                      <option key={t}>{t}</option>
+                    {generateBusinessSlots().map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
                     ))}
                   </select>
                 )}
                 <p className="text-xs text-slate-500">
-                  {plan === "6h" ? "出発時間を選ぶと、返却時間が自動で計算されます。" : "ご来店予定時間は目安で構いません。"}
+                  {plan === "6h" ? t.pickupTimeNote6h : t.pickupTimeNoteOther}
                 </p>
               </div>
             </div>
@@ -978,14 +1053,14 @@ export default function RentacyclePageV5() {
           <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">STEP 03</span>
-              <h2 className="text-xl font-semibold text-slate-900">車種と台数を選ぶ</h2>
-              <p className="text-sm text-slate-500">空き状況を確認しながら、ご希望の台数を入力してください。</p>
+              <h2 className="text-xl font-semibold text-slate-900">{t.step3Title}</h2>
+              <p className="text-sm text-slate-500">{t.step3Desc}</p>
             </div>
             <div className="space-y-6">
-              {BIKE_GROUPS.map((group) => {
+              {bikeGroups.map((group) => {
                 const groupTypes = group.types
-                  .map((typeId) => BIKE_TYPES.find((t) => t.id === typeId))
-                  .filter((t): t is (typeof BIKE_TYPES)[number] => Boolean(t));
+                  .map((typeId) => ({ id: typeId, label: bikeLabels[typeId] ?? typeId }))
+                  .filter((b) => b.id);
 
                 if (groupTypes.length === 0) {
                   return null;
@@ -1003,23 +1078,23 @@ export default function RentacyclePageV5() {
                         <h3 className="text-lg font-semibold text-slate-900">{group.title}</h3>
                         <p className="text-xs text-slate-500">{group.description}</p>
                         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-xs text-slate-600">
-                      <span className="font-semibold text-slate-500">料金の目安</span>
+                      <span className="font-semibold text-slate-500">{t.priceGuide}</span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                        6時間：<span className="font-semibold text-slate-800">¥{priceTable["6h"].toLocaleString()}</span>
+                        {t.price6h}：<span className="font-semibold text-slate-800">¥{priceTable["6h"].toLocaleString()}</span>
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                        1日：<span className="font-semibold text-slate-800">¥{priceTable["1d"].toLocaleString()}</span>
+                        {t.price1d}：<span className="font-semibold text-slate-800">¥{priceTable["1d"].toLocaleString()}</span>
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                        2日以上：<span className="font-semibold text-slate-800">¥{priceTable["2d_plus"].toLocaleString()}</span>
+                        {t.price2d}：<span className="font-semibold text-slate-800">¥{priceTable["2d_plus"].toLocaleString()}</span>
                       </span>
-                      <span className="text-[11px] text-slate-400">追加1日ごとに +¥{priceTable.addDay.toLocaleString()}</span>
+                      <span className="text-[11px] text-slate-400">{t.priceAddDay} +¥{priceTable.addDay.toLocaleString()}</span>
                         </div>
                       </div>
                       {groupImages.length > 0 && (
                         <div className="w-full overflow-x-auto overflow-y-hidden scroll-smooth">
                           {groupImages.length > 3 && (
-                            <p className="mb-1 text-[11px] text-slate-400">← 左右にスクロールで写真をすべてご覧いただけます</p>
+                            <p className="mb-1 text-[11px] text-slate-400">{t.scrollPhotos}</p>
                           )}
                           <div className="flex gap-3 pb-2" style={{ width: "max-content", minWidth: "100%" }}>
                             {groupImages.map((src, i) => (
@@ -1029,7 +1104,7 @@ export default function RentacyclePageV5() {
                               >
                                 <Image
                                   src={src}
-                                  alt={`${group.title}（${i + 1}枚目）`}
+                                  alt={`${group.title}（${i + 1}）`}
                                   fill
                                   className="object-cover"
                                   sizes="192px"
@@ -1043,7 +1118,7 @@ export default function RentacyclePageV5() {
                     <div className="grid gap-4 lg:grid-cols-2">
                       {groupTypes.map((bike) => {
                         const available = remaining?.[bike.id] ?? inventory[bike.id] ?? 0;
-                        const planned = qty[bike.id] || 0;
+                        const planned = qty[bike.id as BikeType] || 0;
                         const projected = available - planned;
                         const shortage = projected < 0;
                         const projectedDisplay = Math.max(projected, 0);
@@ -1056,7 +1131,7 @@ export default function RentacyclePageV5() {
                           >
                             <div className={`flex items-center justify-between gap-3 px-5 py-4 ${style.headerBg}`}>
                               <div>
-                                <p className={`text-[11px] font-semibold uppercase tracking-wide ${style.headerLabel}`}>車種</p>
+                                <p className={`text-[11px] font-semibold uppercase tracking-wide ${style.headerLabel}`}>{t.bikeType}</p>
                                 <h4 className={`text-lg font-semibold ${style.headerText}`}>{bike.label}</h4>
                               </div>
                               <div className={`flex h-10 w-10 items-center justify-center rounded-full ${style.iconBg}`}>
@@ -1066,30 +1141,30 @@ export default function RentacyclePageV5() {
                                 bikeType={bike.id}
                                 startDate={date}
                                 endDate={returnDate ? formatDateKey(returnDate) : null}
-                                requestQty={qty[bike.id] || 0}
+                                requestQty={qty[bike.id as BikeType] || 0}
                                 onStatusChange={(status) => handleStatusChange(bike.id, status)}
-                                fallbackRemaining={remaining?.[bike.id] ?? inventory[bike.id] ?? null}
+                                fallbackRemaining={remaining?.[bike.id as BikeType] ?? inventory[bike.id] ?? null}
                                 className="sr-only"
                               />
                             </div>
                             <div className="space-y-5 p-5">
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
-                                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">空き台数</span>
+                                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{t.availableCount}</span>
                                   <div className="flex items-baseline gap-2">
                                     <span className={`text-3xl font-semibold ${shortage ? "text-red-500" : style.accentText}`}>{projectedDisplay}</span>
-                                    <span className="text-sm text-slate-400">台</span>
+                                    <span className="text-sm text-slate-400">{t.unitBikes}</span>
                                   </div>
                                 </div>
                                 <div className={`flex flex-col gap-3 rounded-2xl border ${style.inputBorder} bg-white p-5`}>
-                                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">予約したい台数</label>
+                                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">{t.reserveCount}</label>
                                   <input
                                     type="number"
                                     min={0}
                                     max={available}
                                     data-availability-pause
                                     className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-right text-2xl font-semibold text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                                    value={qty[bike.id]}
+                                    value={qty[bike.id as BikeType]}
                                     onChange={(e) => setQtySafe(bike.id, Number(e.target.value), available)}
                                     disabled={available <= 0}
                                   />
@@ -1097,7 +1172,7 @@ export default function RentacyclePageV5() {
                               </div>
                               {shortage && (
                                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
-                                  空き台数が不足しています。台数を調整するか別の日程をご検討ください。
+                                  {t.shortageMessage}
                                 </div>
                               )}
                             </div>
@@ -1116,60 +1191,82 @@ export default function RentacyclePageV5() {
           <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">STEP 04</span>
-              <h2 className="text-xl font-semibold text-slate-900">オプションと補償</h2>
-              <p className="text-sm text-slate-500">各自転車ごとに必要なオプションと補償プランをお選びください。</p>
+              <h2 className="text-xl font-semibold text-slate-900">{t.step4Title}</h2>
+              <p className="text-sm text-slate-500">{t.step4Desc}</p>
             </div>
 
             <div className="space-y-4">
-              {BIKE_TYPES.map(({ id, label }) => {
-                const count = qty[id] || 0;
-                if (!count) return null;
-                const perType = addonsByBike[id] || [];
+              {(() => {
+                const currentPannier = countPannier(addonsByBike);
+                const pannierAtLimit = currentPannier >= maxPannierAvailable;
                 return (
-                  <div key={id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <BikeIcon className="h-4 w-4 text-blue-500" />
-                      {label}（{count}台）
-                    </p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {Array.from({ length: count }).map((_, i) => (
-                        <div key={i} className="space-y-3 rounded-2xl border border-white bg-white p-3 shadow-sm">
-                          <p className="text-xs font-semibold text-slate-500">{label} #{i + 1}</p>
-                          <div className="space-y-2">
-                            {ADDONS.map((addon) => (
-                              <label key={addon.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600">
-                                <span>{addon.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-slate-400">+¥{addon.price}</span>
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(perType[i]?.[addon.id])}
-                                    onChange={(e) => {
-                                      const updated = { ...perType[i], [addon.id]: e.target.checked ? 1 : 0 };
-                                      const newList = [...perType];
-                                      newList[i] = updated;
-                                      setAddonsByBike((prev) => ({
-                                        ...prev,
-                                        [id]: newList,
-                                      }));
-                                    }}
-                                  />
+                  <>
+                    {maxPannierAvailable - currentPannier <= 0 ? (
+                      <p className="text-xs text-slate-500">{t.pannierLimitNone}</p>
+                    ) : (
+                      <p className="text-xs text-slate-500">{interpolate(t.pannierLimit, { remaining: String(maxPannierAvailable - currentPannier), current: String(currentPannier) })}</p>
+                    )}
+                    {BIKE_TYPES.map(({ id }) => {
+                      const count = qty[id] || 0;
+                      if (!count) return null;
+                      const label = bikeLabels[id] ?? id;
+                      const perType = addonsByBike[id] || [];
+                      return (
+                        <div key={id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                          <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <BikeIcon className="h-4 w-4 text-blue-500" />
+                            {label}（{count}{locale === "en" ? " " : ""}{t.unitBikes}）
+                          </p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {Array.from({ length: count }).map((_, i) => (
+                              <div key={i} className="space-y-3 rounded-2xl border border-white bg-white p-3 shadow-sm">
+                                <p className="text-xs font-semibold text-slate-500">{label} #{i + 1}</p>
+                                <div className="space-y-2">
+                                  {getAddonsForBikeType(id).map((addon) => {
+                                    const isPannier = addon.id === "A-PANNIER-SET" || addon.id === "A-PANNIER-SINGLE";
+                                    const cannotAddMore = isPannier && pannierAtLimit && !perType[i]?.[addon.id];
+                                    return (
+                                      <label
+                                        key={addon.id}
+                                        className={`flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 ${cannotAddMore ? "opacity-60" : ""}`}
+                                      >
+                                        <span>{addonNames[addon.id] ?? addon.id}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-slate-400">+¥{addon.price}</span>
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(perType[i]?.[addon.id])}
+                                            disabled={cannotAddMore}
+                                            onChange={(e) => {
+                                              const updated = { ...perType[i], [addon.id]: e.target.checked ? 1 : 0 };
+                                              const newList = [...perType];
+                                              newList[i] = updated;
+                                              setAddonsByBike((prev) => ({
+                                                ...prev,
+                                                [id]: newList,
+                                              }));
+                                            }}
+                                          />
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
-                              </label>
+                              </div>
                             ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      );
+                    })}
+                  </>
                 );
-              })}
+              })()}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  <MapPin className="h-3.5 w-3.5" /> ドロップオフサービス
+                  <MapPin className="h-3.5 w-3.5" /> {t.dropoffService}
                 </span>
                 <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
                   dropoff ? "border-blue-400 bg-white" : "border-transparent bg-white"
@@ -1182,16 +1279,16 @@ export default function RentacyclePageV5() {
                     className="mt-1 h-4 w-4"
                   />
                   <div className="space-y-2">
-                    <p className="font-medium text-slate-900">今治で返却する（1台につき ¥{DROPOFF_PRICE.toLocaleString()}）</p>
+                    <p className="font-medium text-slate-900">{interpolate(t.dropoffOption, { price: DROPOFF_PRICE.toLocaleString() })}</p>
                     {dropoff && totalBikes > 0 && (
                       <p className="text-xs text-slate-500">
-                        ドロップオフ料金：¥{dropoffPrice.toLocaleString()}（{totalBikes}台 × ¥{DROPOFF_PRICE.toLocaleString()}）
+                        {interpolate(t.dropoffFeeNote, { total: dropoffPrice.toLocaleString(), count: String(totalBikes), per: DROPOFF_PRICE.toLocaleString() })}
                       </p>
                     )}
                     {isBusySeason(date) ? (
-                      <p className="text-xs text-red-500">※繁忙期（3〜5月／9〜11月）はご利用いただけません</p>
+                      <p className="text-xs text-amber-700">{t.dropoffBusyNote}</p>
                     ) : (
-                      <p className="text-xs text-slate-500">台数分の料金が追加されます。返却後は翌日の貸出ができない場合があります。</p>
+                      <p className="text-xs text-slate-500">{t.dropoffNormalNote}</p>
                     )}
                   </div>
                 </label>
@@ -1199,10 +1296,10 @@ export default function RentacyclePageV5() {
 
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  <Shield className="h-3.5 w-3.5" /> 車両補償プラン
+                  <Shield className="h-3.5 w-3.5" /> {t.insuranceSection}
                 </span>
                 <div className="space-y-2">
-                  {INSURANCE_PLANS.map((planOption) => (
+                  {insurancePlansWithLabels.map((planOption) => (
                     <label
                       key={planOption.id}
                       className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
@@ -1220,7 +1317,7 @@ export default function RentacyclePageV5() {
                         <p className="font-medium text-slate-900">
                           {planOption.name}
                           {planOption.id !== "none" && (
-                            <span className="ml-2 text-xs text-slate-500">¥{planOption.price.toLocaleString()} / 日</span>
+                            <span className="ml-2 text-xs text-slate-500">¥{planOption.price.toLocaleString()} / {locale === "en" ? "day" : "日"}</span>
                           )}
                         </p>
                         {planOption.description && (
@@ -1228,7 +1325,7 @@ export default function RentacyclePageV5() {
                         )}
                         {insurancePlan === planOption.id && planOption.id !== "none" && totalBikes > 0 && rentalDays > 0 && (
                           <p className="text-xs text-blue-600">
-                            補償料金：¥{(planOption.price * rentalDays * totalBikes).toLocaleString()}（{totalBikes}台 × {rentalDays}日）
+                            {locale === "en" ? "Insurance: " : "補償料金："}¥{(planOption.price * rentalDays * totalBikes).toLocaleString()}（{totalBikes}{locale === "en" ? " bikes" : "台"} × {rentalDays}{locale === "en" ? " days" : "日"}）
                           </p>
                         )}
                       </div>
@@ -1236,10 +1333,10 @@ export default function RentacyclePageV5() {
                   ))}
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  ※貸出時と異なる重大な破損が確認された場合、補償内容に応じて修理費等を請求いたします。
+                  {t.insuranceNote}
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  ※全てのレンタル自転車に上限１億円までの対人賠償保険を付帯しております。
+                  {t.insuranceLiability}
                 </p>
               </div>
             </div>
@@ -1253,29 +1350,29 @@ export default function RentacyclePageV5() {
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">STEP 05</span>
-              <h2 className="text-xl font-semibold text-slate-900">料金を確認して予約する</h2>
-              <p className="text-sm text-slate-500">選択内容を確認し、予約内容確認ボタンから最終確認へ進みます。</p>
+              <h2 className="text-xl font-semibold text-slate-900">{t.step5Title}</h2>
+              <p className="text-sm text-slate-500">{t.step5Desc}</p>
             </div>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-600">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">代表者氏名（必須）</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.repName}</label>
                   <input
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="例：木曽 太郎"
+                    placeholder={t.repNamePlaceholder}
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">メールアドレス（必須）</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.repEmail}</label>
                   <input
                     type="email"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
-                    placeholder="例：example@kisoscycle.jp"
+                    placeholder={t.repEmailPlaceholder}
                     className={`rounded-xl border px-3 py-2 text-sm focus:outline-none ${
                       customerEmail
                         ? isEmailValid
@@ -1285,29 +1382,29 @@ export default function RentacyclePageV5() {
                     }`}
                   />
                   {customerEmail && !isEmailValid && (
-                    <p className="text-xs text-red-500">メールアドレスの形式をご確認ください。</p>
+                    <p className="text-xs text-red-500">{t.emailInvalid}</p>
                   )}
                 </div>
-                <p className="text-xs text-slate-500">ご予約内容はこのメールアドレスに自動送信されます。お間違いのないようご入力ください。</p>
+                <p className="text-xs text-slate-500">{t.emailNote}</p>
               </div>
               <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-sm">
                 <div className="flex items-center justify-between text-slate-600">
-                  <span>基本料金</span>
+                  <span>{t.subtotal}</span>
                   <span className="font-semibold text-slate-900">¥{subtotal.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between text-slate-600">
-                  <span>オプション</span>
+                  <span>{t.options}</span>
                   <span className="font-semibold text-slate-900">¥{addons.toLocaleString()}</span>
                 </div>
                 {dropoffPrice > 0 && (
                   <div className="flex items-center justify-between text-slate-600">
-                    <span>ドロップオフ</span>
+                    <span>{t.dropoff}</span>
                     <span className="font-semibold text-slate-900">¥{dropoffPrice.toLocaleString()}</span>
                   </div>
                 )}
                 {insurancePrice > 0 && (
                   <div className="flex items-center justify-between text-slate-600">
-                    <span>車両補償</span>
+                    <span>{t.insurance}</span>
                     <span className="font-semibold text-slate-900">¥{insurancePrice.toLocaleString()}</span>
                   </div>
                 )}
@@ -1320,11 +1417,16 @@ export default function RentacyclePageV5() {
               </div>
             </div>
 
+            {pannierCount > maxPannierAvailable && (
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {interpolate(t.pannierOverflow, { max: String(maxPannierAvailable), current: String(pannierCount) })}
+              </p>
+            )}
             <div className="mt-4 flex flex-col justify-between gap-4 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 text-slate-700 sm:flex-row sm:items-center">
               <div className="text-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">お支払い予定金額</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{t.totalLabel}</p>
                 <p className="mt-2 text-3xl font-semibold text-blue-900">¥{totalPrice.toLocaleString()}</p>
-                <p className="mt-1 text-xs text-blue-600">税込・店頭でお支払いください。</p>
+                <p className="mt-1 text-xs text-blue-600">{t.totalNote}</p>
               </div>
               <button
                 disabled={isBookingDisabled}
@@ -1333,7 +1435,7 @@ export default function RentacyclePageV5() {
                   isBookingDisabled ? "cursor-not-allowed bg-slate-300" : "bg-blue-600 hover:bg-blue-700"
                 }`}
               >
-                予約内容を確認
+                {t.confirmButton}
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -1346,54 +1448,54 @@ export default function RentacyclePageV5() {
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Review</p>
-                <h2 className="text-2xl font-semibold text-slate-900">ご予約内容の最終確認</h2>
+                <h2 className="text-2xl font-semibold text-slate-900">{t.modalTitle}</h2>
               </div>
               <button
                 onClick={() => setShowConfirmModal(false)}
                 disabled={isSubmitting}
                 className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
-                閉じる
+                {t.closeButton}
               </button>
             </div>
 
             <div className="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">プラン</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.planLabel}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {plan === "6h" && "6時間プラン"}
-                    {plan === "1d" && "1日プラン"}
-                    {plan === "2d_plus" && `${days}日プラン`}
+                    {plan === "6h" && t.plan6hTitle}
+                    {plan === "1d" && t.plan1dTitle}
+                    {plan === "2d_plus" && `${days}${locale === "en" ? " days" : "日プラン"}`}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">貸出日時</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.pickupDateTime}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">
                     {date}
-                    {plan === "6h" && startTime && `（開始 ${startTime}）`}
-                    {plan !== "6h" && pickupTime && `（来店 ${pickupTime}）`}
+                    {plan === "6h" && startTime && `（${locale === "en" ? "Start" : "開始"} ${startTime}）`}
+                    {plan !== "6h" && pickupTime && `（${locale === "en" ? "Pick-up" : "来店"} ${pickupTime}）`}
                   </p>
-                  {returnDate && <p className="text-xs text-slate-500">返却日：{formatDateKey(returnDate)}</p>}
+                  {returnDate && <p className="text-xs text-slate-500">{t.returnDateLabel}：{formatDateKey(returnDate)}</p>}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ご連絡先</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{customerName || "未入力"}</p>
-                <p className="text-xs text-slate-500">{customerEmail || "メール未入力"}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contactLabel}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{customerName || (locale === "en" ? "—" : "未入力")}</p>
+                <p className="text-xs text-slate-500">{customerEmail || (locale === "en" ? "Email not entered" : "メール未入力")}</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">自転車</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.bikesLabel}</p>
                 <div className="mt-2 space-y-2 text-sm text-slate-700">
                   {Object.entries(qty).map(([bikeType, count]) => {
                     if (!count || count === 0) return null;
-                    const bikeLabel = BIKE_TYPES.find((b) => b.id === bikeType)?.label || bikeType;
+                    const bikeLabel = bikeLabels[bikeType] || bikeType;
                     return (
                       <div key={bikeType} className="flex items-center justify-between">
                         <span>{bikeLabel}</span>
-                        <span className="font-semibold">× {count}台</span>
+                        <span className="font-semibold">× {count} {t.unitBikes}</span>
                       </div>
                     );
                   })}
@@ -1402,7 +1504,7 @@ export default function RentacyclePageV5() {
 
               {addons > 0 && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">オプション</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.options}</p>
                   <div className="mt-2 space-y-2 text-sm text-slate-700">
                     {ADDONS.map((addon) => {
                       const totalQty = BIKE_TYPES.reduce((sum, { id }) => {
@@ -1415,7 +1517,7 @@ export default function RentacyclePageV5() {
                       if (!totalQty) return null;
                       return (
                         <div key={addon.id} className="flex items-center justify-between">
-                          <span>{addon.name}</span>
+                          <span>{addonNames[addon.id]}</span>
                           <span className="font-semibold">
                             × {totalQty}（¥{(addon.price * totalQty).toLocaleString()}）
                           </span>
@@ -1428,22 +1530,22 @@ export default function RentacyclePageV5() {
 
               {dropoff && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ドロップオフ</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.dropoffLabelResult}</p>
                   <p className="mt-1 text-sm text-slate-700">
-                    今治返却（¥{DROPOFF_PRICE.toLocaleString()} × {totalBikes}台） = ¥{dropoffPrice.toLocaleString()}
+                    {locale === "en" ? "Imabari return" : "今治返却"}（¥{DROPOFF_PRICE.toLocaleString()} × {totalBikes}{locale === "en" ? " bikes" : "台"}） = ¥{dropoffPrice.toLocaleString()}
                   </p>
                 </div>
               )}
 
               {insurancePlan !== "none" && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">車両補償</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.insuranceLabel}</p>
                   {(() => {
-                    const planInfo = INSURANCE_PLANS.find((p) => p.id === insurancePlan);
+                    const planInfo = insurancePlansWithLabels.find((p) => p.id === insurancePlan);
                     if (!planInfo) return null;
                     return (
                       <p className="mt-1 text-sm text-slate-700">
-                        {planInfo.name}（¥{planInfo.price.toLocaleString()} × {rentalDays}日 × {totalBikes}台） = ¥
+                        {planInfo.name}（¥{planInfo.price.toLocaleString()} × {rentalDays}{locale === "en" ? " days" : "日"} × {totalBikes}{locale === "en" ? " bikes" : "台"}） = ¥
                         {insurancePrice.toLocaleString()}
                       </p>
                     );
@@ -1452,27 +1554,27 @@ export default function RentacyclePageV5() {
               )}
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">料金内訳</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.paymentBreakdown}</p>
                 <div className="mt-2 space-y-2 text-sm text-slate-700">
                   <p className="flex items-center justify-between">
-                    <span>基本料金</span>
+                    <span>{t.subtotal}</span>
                     <span className="font-semibold">¥{subtotal.toLocaleString()}</span>
                   </p>
                   {addons > 0 && (
                     <p className="flex items-center justify-between">
-                      <span>オプション</span>
+                      <span>{t.options}</span>
                       <span className="font-semibold">¥{addons.toLocaleString()}</span>
                     </p>
                   )}
                   {dropoffPrice > 0 && (
                     <p className="flex items-center justify-between">
-                      <span>ドロップオフ</span>
+                      <span>{t.dropoff}</span>
                       <span className="font-semibold">¥{dropoffPrice.toLocaleString()}</span>
                     </p>
                   )}
                   {insurancePrice > 0 && (
                     <p className="flex items-center justify-between">
-                      <span>車両補償</span>
+                      <span>{t.insurance}</span>
                       <span className="font-semibold">¥{insurancePrice.toLocaleString()}</span>
                     </p>
                   )}
@@ -1483,7 +1585,7 @@ export default function RentacyclePageV5() {
                     </p>
                   )}
                   <p className="flex items-center justify-between text-lg font-semibold text-slate-900">
-                    <span>お支払い予定金額</span>
+                    <span>{t.totalLabel}</span>
                     <span>¥{totalPrice.toLocaleString()}</span>
                   </p>
                 </div>
@@ -1496,7 +1598,7 @@ export default function RentacyclePageV5() {
                 disabled={isSubmitting}
                 className="rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-600 hover:bg-white disabled:opacity-50"
               >
-                修正する
+                {t.editButton}
               </button>
               <button
                 onClick={async () => {
@@ -1522,7 +1624,7 @@ export default function RentacyclePageV5() {
                         const available =
                           result.available === true || result.available === "true" ? true : false;
                         if (!available) {
-                          alert(`${bikeType} の在庫が足りません。別の日または台数を変更してください。`);
+                          alert(`${bikeType} ${t.noStockAlert}`);
                           setIsSubmitting(false);
                           return;
                         }
@@ -1558,11 +1660,11 @@ export default function RentacyclePageV5() {
 
                     const json = await res.json();
                     if (json.status !== "ok") {
-                      throw new Error(json.message || "予約に失敗しました");
+                      throw new Error(json.message || t.bookFailed);
                     }
 
                     if (!plan) {
-                      throw new Error("プランが未設定です");
+                      throw new Error(t.planNotSet);
                     }
 
                     const planId = plan as "6h" | "1d" | "2d_plus";
@@ -1574,23 +1676,23 @@ export default function RentacyclePageV5() {
                     const selectedBikes = Object.entries(qty)
                       .filter(([_, count]) => (count || 0) > 0)
                       .map(([bikeType, count]) => ({
-                        label: BIKE_TYPES.find((b) => b.id === bikeType)?.label || bikeType,
+                        label: bikeLabels[bikeType] || bikeType,
                         count: count || 0,
                       }));
 
                     const selectedAddons = ADDONS.map((addon) => {
                       const quantity = BIKE_TYPES.reduce((sum, { id }) => {
                         const perType = addonsByBike[id] || [];
-                        return sum + perType.reduce((inner, set) => inner + (set?.[addon.id] ?? 0), 0);
-                      }, 0);
-                      return { name: addon.name, quantity, price: addon.price };
+                      return sum + perType.reduce((inner, set) => inner + (set?.[addon.id] ?? 0), 0);
+                    }, 0);
+                    return { name: addonNames[addon.id], quantity, price: addon.price };
                     }).filter((item) => item.quantity > 0);
 
                     setReservationResult({
                       reservationId: reservationIdFull,
                       reservationIdShort,
                       planId,
-                      planLabel: PLAN_LABELS[planId],
+                      planLabel: planLabels[planId],
                       startDate: date,
                       endDate: reservationEndDate,
                       startTime: planId === "6h" ? startTime : null,
@@ -1623,7 +1725,7 @@ export default function RentacyclePageV5() {
                     setCustomerEmail("");
                     setShowConfirmModal(false);
                   } catch (error: any) {
-                    alert(error?.message || "予約に失敗しました");
+                    alert(error?.message || t.bookFailed);
                   } finally {
                     setIsSubmitting(false);
                   }
@@ -1631,7 +1733,7 @@ export default function RentacyclePageV5() {
                 disabled={isSubmitting}
                 className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
-                {isSubmitting ? "予約中..." : "この内容で予約する"}
+                {isSubmitting ? t.submittingButton : t.submitButton}
               </button>
             </div>
           </div>
@@ -1651,39 +1753,39 @@ export default function RentacyclePageV5() {
     <div className="min-h-screen bg-slate-50/70">
       <div className="mx-auto max-w-3xl px-6 py-16 space-y-8 text-center">
         <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" /> ご予約が完了しました
+          <CheckCircle2 className="h-4 w-4" /> {t.successBadge}
         </div>
         <div className="space-y-3">
-          <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">木曽サイクルへのご予約ありがとうございます</h1>
+          <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">{t.successTitle}</h1>
           <p className="text-sm text-slate-500 sm:text-base">
-            ご入力いただいた内容で予約を承りました。ご来店当日は受付でご予約番号をお伝えください。
+            {t.successMessage}
           </p>
         </div>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">予約番号</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.reservationNumber}</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{result.reservationIdShort}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">プラン</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.planLabel}</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{result.planLabel}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">代表者</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.repLabel}</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{result.customerName}</p>
               <p className="text-xs text-slate-500">{result.customerEmail}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">貸出日</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.pickupDateLabel}</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{result.startDate}</p>
-              {result.startTime && <p className="text-xs text-slate-500">開始時間：{result.startTime}</p>}
-              {result.pickupTime && <p className="text-xs text-slate-500">来店予定：{result.pickupTime}</p>}
+              {result.startTime && <p className="text-xs text-slate-500">{locale === "en" ? "Start" : "開始時間"}：{result.startTime}</p>}
+              {result.pickupTime && <p className="text-xs text-slate-500">{locale === "en" ? "Pick-up" : "来店予定"}：{result.pickupTime}</p>}
             </div>
             {result.endDate && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">返却日</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.returnDateLabel}</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">{result.endDate}</p>
               </div>
             )}
@@ -1692,13 +1794,13 @@ export default function RentacyclePageV5() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <BikeIcon className="h-4 w-4" /> ご予約の車両
+                <BikeIcon className="h-4 w-4" /> {t.bookedBikes}
               </div>
               <ul className="space-y-2 text-sm text-slate-700">
                 {result.bikes.map(({ label, count }) => (
                   <li key={label} className="flex items-center justify-between">
                     <span>{label}</span>
-                    <span className="font-semibold">× {count}台</span>
+                    <span className="font-semibold">× {count} {t.unitBikes}</span>
                   </li>
                 ))}
               </ul>
@@ -1706,7 +1808,7 @@ export default function RentacyclePageV5() {
 
             <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <Shield className="h-4 w-4" /> オプション・補償
+                <Shield className="h-4 w-4" /> {t.optionsAndInsurance}
               </div>
               <div className="space-y-2 text-sm text-slate-700">
                 {result.addons.length > 0 ? (
@@ -1719,35 +1821,35 @@ export default function RentacyclePageV5() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-slate-500">オプションの追加はありません。</p>
+                  <p className="text-xs text-slate-500">{t.noOptions}</p>
                 )}
                 {result.insurancePlan !== "none" ? (
                   <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600">
-                    車両補償：{INSURANCE_PLAN_LABELS[result.insurancePlan]}（¥
+                    {t.insuranceLabel}：{insurancePlansWithLabels.find((p) => p.id === result.insurancePlan)?.name}（¥
                     {result.insurancePrice.toLocaleString()}）
                   </p>
                 ) : (
-                  <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500">車両補償：加入なし</p>
+                  <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500">{t.insuranceLabel}：{t.insuranceNone}</p>
                 )}
                 {result.dropoff ? (
                   <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600">
-                    ドロップオフ：今治返却（¥{result.dropoffPrice.toLocaleString()}）
+                    {t.dropoffLabelResult}：{locale === "en" ? "Imabari return" : "今治返却"}（¥{result.dropoffPrice.toLocaleString()}）
                   </p>
                 ) : (
-                  <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500">ドロップオフ：利用なし</p>
+                  <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500">{t.dropoffLabelResult}：{t.dropoffNo}</p>
                 )}
               </div>
             </div>
           </div>
 
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 px-4 py-5 text-left text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">お支払い予定金額</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">{t.paymentLabel}</p>
             <p className="mt-2 text-3xl font-semibold">¥{result.totalPrice.toLocaleString()}</p>
             <div className="mt-3 space-y-1 text-xs text-slate-200/80">
-              <p>基本料金：¥{result.subtotal.toLocaleString()}</p>
-              {result.addonsPrice > 0 && <p>オプション：¥{result.addonsPrice.toLocaleString()}</p>}
-              {result.dropoffPrice > 0 && <p>ドロップオフ：¥{result.dropoffPrice.toLocaleString()}</p>}
-              {result.insurancePrice > 0 && <p>車両補償：¥{result.insurancePrice.toLocaleString()}</p>}
+              <p>{t.subtotal}：¥{result.subtotal.toLocaleString()}</p>
+              {result.addonsPrice > 0 && <p>{t.options}：¥{result.addonsPrice.toLocaleString()}</p>}
+              {result.dropoffPrice > 0 && <p>{t.dropoff}：¥{result.dropoffPrice.toLocaleString()}</p>}
+              {result.insurancePrice > 0 && <p>{t.insurance}：¥{result.insurancePrice.toLocaleString()}</p>}
               {result.discountLabel && (
                 <p className="text-emerald-200">{result.discountLabel}（-¥{result.discount.toLocaleString()}）</p>
               )}
@@ -1756,8 +1858,8 @@ export default function RentacyclePageV5() {
         </section>
 
         <div className="space-y-3 text-sm text-slate-500">
-          <p>ご予約内容はご登録のメールアドレスにも送信されています。確認メールが届かない場合は迷惑メールフォルダーもご確認ください。</p>
-          <p>変更・キャンセルをご希望の際は、予約完了メール内のキャンセル申請リンクからお手続きをお願いいたします。</p>
+          <p>{t.emailSentNote}</p>
+          <p>{t.cancelNote}</p>
         </div>
 
         <div className="flex flex-wrap justify-center gap-3">
@@ -1765,7 +1867,7 @@ export default function RentacyclePageV5() {
             onClick={() => setReservationResult(null)}
             className="inline-flex items-center justify-center rounded-full border border-slate-300 px-6 py-2 text-sm font-medium text-slate-600 transition hover:bg-white"
           >
-            別の予約を入力する
+            {t.anotherBooking}
           </button>
         </div>
       </div>

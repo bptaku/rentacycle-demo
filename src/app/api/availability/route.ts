@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
   const { data: stocks, error } = await supabaseServer
     .from("stock")
-    .select("date, bike_type, base_quantity, manual_adjustment, reserved, available, bike_master(label, category)")
+    .select("date, bike_type, base_quantity, manual_adjustment, reserved, available")
     .gte("date", rangeStart)
     .lte("date", rangeEnd)
     .order("date", { ascending: true })

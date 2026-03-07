@@ -1,19 +1,29 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import useSWR from "swr"
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCcw, ListTodo } from "lucide-react";
 import StockTable from "./StockTable"
+import BikeMasterTable from "./BikeMasterTable"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 export default function AdminStockPage() {
   const today = new Date().toISOString().slice(0, 10)
   const [selectedDate, setSelectedDate] = useState(today)
-  const [range, setRange] = useState<"1d" | "1week">("1d")
+  const [showBikeMaster, setShowBikeMaster] = useState(false)
 
-  const key = `/api/admin/stock?date=${selectedDate}&range=${range}`
-const { data, error, mutate, isLoading } = useSWR(key, fetcher)
+  const key = `/api/admin/stock?date=${selectedDate}&range=1d`
+  const { data, error, mutate, isLoading } = useSWR(key, fetcher)
+
+  const bikeMasterKey = showBikeMaster ? `/api/admin/bike-master` : null
+  const {
+    data: bikeMasterData,
+    error: bikeMasterError,
+    mutate: mutateBikeMaster,
+    isLoading: bikeMasterLoading,
+  } = useSWR(bikeMasterKey, fetcher)
 
   const shiftDate = (days: number) => {
     const current = new Date(selectedDate)
@@ -48,38 +58,62 @@ const { data, error, mutate, isLoading } = useSWR(key, fetcher)
   if (data.status === "error")
     return <div className="p-4 text-gray-500">{data.message || "データが見つかりません"}</div>
 
-  // 1週間分データを日付ごとにグループ化
-  const grouped =
-    range === "1week"
-      ? data.stocks.reduce((acc: Record<string, any[]>, row: any) => {
-          if (!acc[row.date]) acc[row.date] = []
-          acc[row.date].push(row)
-          return acc
-        }, {})
-      : { [selectedDate]: data.stocks }
-
-  const dateList = Object.keys(grouped).sort()
-
   return (
     <div className="min-h-screen bg-slate-50/70 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold text-slate-900">在庫管理</h1>
-          <p className="text-sm text-slate-500">
-            オンライン以外で受けた予約も含めて在庫を把握し、貸出準備をスムーズに進めましょう。
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">在庫管理</h1>
+              <p className="text-sm text-slate-500 mt-1">
+                オンライン以外で受けた予約も含めて在庫を把握し、貸出準備をスムーズに進めましょう。
+              </p>
+            </div>
+            <Link
+              href="/admin/reservations"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <ListTodo className="h-4 w-4" />
+              予約管理
+            </Link>
+          </div>
         </header>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                <CalendarDays className="h-3.5 w-3.5" />
-                {selectedDate}
-              </span>
-              <div className="hidden text-xs text-slate-400 md:block">在庫の基準日</div>
-            </div>
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowBikeMaster((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:bg-slate-100"
+          >
+            {showBikeMaster ? "基本在庫を隠す" : "基本在庫を表示"}
+          </button>
+        </div>
 
+        {showBikeMaster &&
+          (bikeMasterError ? (
+            <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+              bike_master 取得エラー: {bikeMasterError.message}
+            </div>
+          ) : bikeMasterLoading || !bikeMasterData ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+              基本在庫を読み込み中...
+            </div>
+          ) : bikeMasterData.status === "error" ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+              {bikeMasterData.message || "bike_master が見つかりません"}
+            </div>
+          ) : (
+            <BikeMasterTable
+              rows={bikeMasterData.rows || []}
+              propagateStartDate={selectedDate}
+              onSaved={() => {
+                mutateBikeMaster(undefined, { revalidate: true })
+                mutate(undefined, { revalidate: true })
+              }}
+            />
+          ))}
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => shiftDate(-1)}
@@ -107,44 +141,18 @@ const { data, error, mutate, isLoading } = useSWR(key, fetcher)
               </button>
             </div>
 
-            <div className="flex items-center justify-end gap-2">
-              <div className="relative">
-                <select
-                  value={range}
-                  onChange={(e) => setRange(e.target.value as "1d" | "1week")}
-                  className="appearance-none rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 focus:outline-none"
-                >
-                  <option value="1d">1日表示</option>
-                  <option value="1week">1週間表示</option>
-                </select>
-                <LayoutGrid className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </div>
-
-              <button
-                onClick={() => setSelectedDate(today)}
-                className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
+            <button
+              onClick={() => setSelectedDate(today)}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
                 <RefreshCcw className="h-4 w-4" />
                 今日に戻る
-              </button>
-            </div>
+            </button>
           </div>
         </section>
 
         <section className="space-y-6">
-          {range === "1week" ? (
-            dateList.map((d) => (
-              <div key={d} className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-                  <CalendarDays className="h-4 w-4" />
-                  {d}
-                </div>
-                <StockTable data={grouped[d]} onAdjust={handleAdjust} />
-              </div>
-            ))
-          ) : (
-            <StockTable data={data.stocks} onAdjust={handleAdjust} />
-          )}
+          <StockTable data={data.stocks} onAdjust={handleAdjust} />
         </section>
       </div>
     </div>

@@ -1,5 +1,8 @@
 import { supabaseServer } from "@/utils/supabase/server";
-import { sendReservationConfirmationEmail } from "@/lib/email";
+import {
+  sendReservationConfirmationEmail,
+  sendReservationCreatedNotificationEmailToShop,
+} from "@/lib/email";
 import { NextResponse } from "next/server";
 
 function createDateFromInput(dateStr: string | null): Date | null {
@@ -28,6 +31,46 @@ function enumerateDates(start: string, end: string): string[] {
   return days;
 }
 
+const MAX_PANNIER = 10;
+
+function countPannierFromAddons(addons: Record<string, Array<Record<string, number>> | undefined> | null): number {
+  if (!addons || typeof addons !== "object") return 0;
+  let n = 0;
+  for (const addonSets of Object.values(addons)) {
+    if (!Array.isArray(addonSets)) continue;
+    for (const set of addonSets) {
+      if (!set || typeof set !== "object") continue;
+      n += ((set["A-PANNIER-SET"] ?? 0) * 2) + (set["A-PANNIER-SINGLE"] ?? 0);
+    }
+  }
+  return n;
+}
+
+/**
+ * 予備バッテリー（A-BATTERY）は電動A専用オプションとしてサーバー側でもバリデーションする
+ */
+function hasInvalidBatteryAddons(
+  bikes: Record<string, number>,
+  addonsByBike: Record<string, Array<Record<string, number>> | undefined> | null | undefined
+): boolean {
+  if (!addonsByBike || typeof addonsByBike !== "object") return false;
+
+  for (const [bikeType, qty] of Object.entries(bikes || {})) {
+    if (!qty || qty <= 0) continue;
+    const addonSets = addonsByBike[bikeType] || [];
+    const limit = Math.min(qty, addonSets.length);
+    for (let i = 0; i < limit; i++) {
+      const set = addonSets[i];
+      if (!set || typeof set !== "object") continue;
+      const batteryCount = set["A-BATTERY"] ?? 0;
+      if (batteryCount && !bikeType.startsWith("電動A")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * 🚲 /api/reserve
  * v5.0 — 予約登録 + 在庫同期 + 予約メール送信
@@ -39,8 +82,8 @@ export async function POST(req: Request) {
       plan,
       start_date,
       end_date,
-      start_time,
-      pickup_time,
+      start_time: raw_start_time,
+      pickup_time: raw_pickup_time,
       bikes,
       addonsByBike,
       dropoff = false,
@@ -55,6 +98,11 @@ export async function POST(req: Request) {
       email,
       paid = false,
     } = body;
+
+    const start_time =
+      raw_start_time && String(raw_start_time).trim() ? String(raw_start_time).trim() : null;
+    const pickup_time =
+      raw_pickup_time && String(raw_pickup_time).trim() ? String(raw_pickup_time).trim() : null;
 
     if (!plan || !start_date || !end_date || !bikes || Object.keys(bikes).length === 0) {
       return Response.json(
@@ -123,6 +171,51 @@ export async function POST(req: Request) {
       }
     }
 
+    if (hasInvalidBatteryAddons(bikes, addonsByBike)) {
+      return Response.json(
+        {
+          success: false,
+          message: "予備バッテリーは電動A専用オプションのため、他の車種では選択できません。",
+        },
+        { status: 400 }
+      );
+    }
+
+    const newPannier = countPannierFromAddons(addonsByBike || null);
+    if (newPannier > 0) {
+      // パニアは1日ごとにカウント：各日に既存予約のパニア合計を足し、どの日も 既存+新規 <= 10 であることを確認する
+      const { data: existingReservations } = await supabase
+        .from("reservations")
+        .select("start_date, end_date, addons")
+        .neq("status", "canceled")
+        .lte("start_date", effectiveEndDate)
+        .gte("end_date", start_date);
+
+      const pannierByDay: Record<string, number> = {};
+      for (const d of targetDates) pannierByDay[d] = 0;
+
+      for (const r of existingReservations || []) {
+        const rStart = r.start_date ?? "";
+        const rEnd = r.end_date ?? rStart;
+        const count = countPannierFromAddons(r.addons as Record<string, Array<Record<string, number>> | undefined> | null);
+        for (const d of targetDates) {
+          if (d >= rStart && d <= rEnd) pannierByDay[d] = (pannierByDay[d] ?? 0) + count;
+        }
+      }
+
+      for (const d of targetDates) {
+        if ((pannierByDay[d] ?? 0) + newPannier > MAX_PANNIER) {
+          return Response.json(
+            {
+              success: false,
+              message: `パニアバッグは全予約合計で1日あたり最大${MAX_PANNIER}個までです。この期間は既に他の予約で使用されているため、選択された台数ではご予約できません。`,
+            },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from("reservations")
       .insert([
@@ -163,7 +256,7 @@ export async function POST(req: Request) {
 
     // メール送信（非同期で実行、失敗しても予約は成功）
     if (reservation && email) {
-      sendReservationConfirmationEmail({
+      const emailPayload = {
         reservationId: reservation.id,
         name: name || "お客様",
         email,
@@ -182,7 +275,9 @@ export async function POST(req: Request) {
         dropoffPrice: dropoff_price || 0,
         discount: discount || 0,
         totalPrice: total_price || 0,
-      })
+      } as const;
+
+      sendReservationConfirmationEmail(emailPayload)
         .then((result) => {
           if (result.success) {
             console.log(`✅ 予約確認メール送信成功: ${reservation.id} → ${email}`);
@@ -193,6 +288,14 @@ export async function POST(req: Request) {
         .catch((emailError) => {
           console.error(`❌ 予約確認メール送信エラー: ${reservation.id} → ${email}`, emailError);
         });
+
+      // お店宛ての新規予約通知メール（失敗しても予約自体は成功扱い）
+      sendReservationCreatedNotificationEmailToShop(emailPayload).catch((shopEmailError) => {
+        console.error(
+          `❌ 予約作成通知メール送信エラー（管理用）: ${reservation.id} → RESEND_SHOP_EMAIL`,
+          shopEmailError
+        );
+      });
     } else if (!email) {
       console.warn(`⚠️ メールアドレスが未入力のため、予約確認メールを送信できません: ${reservation?.id}`);
     }

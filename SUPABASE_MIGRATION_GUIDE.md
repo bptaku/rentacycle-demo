@@ -4,6 +4,22 @@
 
 自転車タイプの変更に合わせて、Supabaseのデータベースを更新する必要があります。
 
+## ✅ 適用状況（既存Supabase）
+
+- **2026-03-06**: `supabase/migrations/20250306000000_road_s_and_electric_c_rename.sql` を **SQL Editor で実行済み**
+  - ロードバイク S 追加
+  - 電動C のリネーム（旧 電動C M → 電動C S、旧 電動C L → 電動C M）
+  - `reservations.bikes` / `reservations.bike_numbers` のキー移行
+- **2026-03-06**: 「常に3ヶ月先まで予約可能」にするための運用SQLを **SQL Editor で手動実行**
+  - 対象期間: `current_date` 〜 `current_date + interval '3 months'`
+  - `bike_master.base_quantity` をソースに、同期間の `stock.base_quantity` を UPDATE / INSERT（不足行を生成）
+  - `trg_update_available` により `available` も自動で整合
+- **2026-03-06**: 「常に6ヶ月先まで予約可能」にするための **自動ジョブ** を設定
+  - Postgres 関数 `public.sync_stock_next_6_months()` を作成  
+    - 今日〜6ヶ月先の `stock` を最新の `bike_master.base_quantity` で UPDATE / INSERT
+    - `trg_update_available` により `available` を再計算
+  - Supabase の Cron（`cron.schedule` / Dashboard → Integrations → Cron）で、毎日 `select public.sync_stock_next_6_months();` を実行するジョブを作成
+
 ## ⚠️ 実行前の注意事項
 
 1. **バックアップを取得**
@@ -50,11 +66,14 @@ supabase db push
 以下の新しい自転車タイプの在庫レコードを作成：
 - `キッズ26インチ`
 - `クロスバイク XS`
+- `ロードバイク S`（2025-03-06 追加）
 - `ロードバイク M`
 - `ロードバイク L`
 - `電動B チャイルドシート`
-- `電動C M`
-- `電動C L`
+- `電動C S`（旧 電動C M、2025-03-06 リネーム）
+- `電動C M`（旧 電動C L、2025-03-06 リネーム）
+
+**別マイグレーション（20250306000000）**: ロードバイク S の追加と電動C のリネーム（M→S, L→M）は `supabase/migrations/20250306000000_road_s_and_electric_c_rename.sql` で実行。
 
 ### 3. 初期在庫数の設定
 

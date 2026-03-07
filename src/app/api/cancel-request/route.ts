@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { sendCancelRequestNotificationEmail } from "@/lib/email";
 
 /**
  * キャンセル申請API
@@ -19,7 +20,21 @@ export async function POST(req: Request) {
     // 現在の予約データ取得
     const { data: reservation, error: fetchError } = await supabase
       .from("reservations")
-      .select("id, status, cancel_requested")
+      .select(
+        `
+        id,
+        status,
+        cancel_requested,
+        name,
+        email,
+        start_date,
+        end_date,
+        start_time,
+        pickup_time,
+        plan,
+        total_price
+      `
+      )
       .eq("id", id)
       .single();
 
@@ -56,6 +71,24 @@ export async function POST(req: Request) {
     if (updateError) {
       console.error("Cancel request update error:", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    // お店宛てにキャンセル申請通知メールを送信（失敗してもAPIレスポンスには影響させない）
+    try {
+      await sendCancelRequestNotificationEmail({
+        reservationId: reservation.id,
+        name: reservation.name,
+        email: reservation.email,
+        plan: reservation.plan,
+        startDate: reservation.start_date,
+        endDate: reservation.end_date,
+        startTime: reservation.start_time,
+        pickupTime: reservation.pickup_time,
+        totalPrice: reservation.total_price,
+        cancelReason: reason || null,
+      });
+    } catch (notificationError) {
+      console.error("Failed to send cancel request notification email:", notificationError);
     }
 
     return NextResponse.json(

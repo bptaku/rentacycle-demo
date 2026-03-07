@@ -39,7 +39,7 @@
 ### ステップ1: 本番用Supabaseプロジェクトの作成
 
 1. Supabaseで新しいプロジェクトを作成（本番環境用）
-   - プロジェクト名: `rentacycle-production`など
+   - プロジェクト名: `kisocycle-test`（テスト環境）や `kisocycle-production`（本番）など
    - リージョン: ユーザーに最も近い場所（日本なら`ap-northeast-1`）
 
 2. 本番プロジェクトの環境変数をメモ
@@ -128,7 +128,7 @@ SUPABASE_SERVICE_ROLE_KEY = your-production-service-role-key
 
 1. "Deploy" ボタンをクリック
 2. デプロイが完了すると、本番URLが発行されます
-   - 例: `https://rentacycle-demo.vercel.app`
+   - 例: `https://kisocycle-test.vercel.app`
 
 #### ステップ5: カスタムドメインの設定（オプション）
 

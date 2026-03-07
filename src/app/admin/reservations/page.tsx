@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   CalendarDays,
   RefreshCcw,
@@ -18,6 +19,7 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
+  Package,
 } from "lucide-react";
 import BikeRevenueSection from "./BikeRevenueSection";
 
@@ -26,7 +28,6 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 const ADDONS = [
   { id: "A-HOLDER", name: "スマホホルダー" },
   { id: "A-BATTERY", name: "予備バッテリー" },
-  { id: "A-CHILDSEAT", name: "チャイルドシート" },
   { id: "A-PANNIER-SET", name: "パニアバッグ左右セット" },
   { id: "A-PANNIER-SINGLE", name: "パニアバッグ片側" },
 ];
@@ -81,6 +82,19 @@ const STATUS_COLORS: Record<string, string> = {
   canceled: "bg-gray-100 text-gray-600 border-gray-300",
 };
 
+/** 表示順: 予約済み → 貸出中 → ドロップオフ中 → 返却済み → キャンセル済み */
+const STATUS_ORDER: Record<string, number> = {
+  reserved: 0,
+  in_use: 1,
+  dropoff_in_progress: 2,
+  completed: 3,
+  canceled: 4,
+};
+
+function getArrivalTime(r: Reservation): string | null {
+  return r.pickup_time ?? r.start_time ?? null;
+}
+
 function getStatusSequence(reservation: Reservation): string[] {
   const workflow = reservation.dropoff || reservation.status === "dropoff_in_progress"
     ? ["reserved", "in_use", "dropoff_in_progress", "completed"]
@@ -125,6 +139,27 @@ export default function AdminReservationsPage() {
   );
 
   const reservations = useMemo(() => data?.reservations ?? [], [data]);
+  /** ステータス順（予約済み→貸出中→ドロップオフ中→返却済み→キャンセル済み）、同ステータス内は来店・出発時間順 */
+  const sortedReservations = useMemo(() => {
+    return [...reservations].sort((a, b) => {
+      const orderA = STATUS_ORDER[a.status] ?? 99;
+      const orderB = STATUS_ORDER[b.status] ?? 99;
+      if (orderA !== orderB) return orderA - orderB;
+      const timeA = getArrivalTime(a);
+      const timeB = getArrivalTime(b);
+      if (!timeA && !timeB) return 0;
+      if (!timeA) return 1;
+      if (!timeB) return -1;
+      return timeA.localeCompare(timeB);
+    });
+  }, [reservations]);
+  const cancelRequestedCount = useMemo(
+    () =>
+      reservations.filter(
+        (r) => r.cancel_requested && r.status !== "canceled"
+      ).length,
+    [reservations]
+  );
 
   const ensureInputs = useCallback(
     (reservation: Reservation) => {
@@ -300,10 +335,21 @@ export default function AdminReservationsPage() {
     <div className="min-h-screen bg-slate-50/70 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold text-slate-900">予約管理</h1>
-          <p className="text-sm text-slate-500">
-            予約状況と自転車番号をひと目で把握し、貸出・返却のオペレーションを整えましょう。
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">予約管理</h1>
+              <p className="text-sm text-slate-500 mt-1">
+                予約状況と自転車番号をひと目で把握し、貸出・返却のオペレーションを整えましょう。
+              </p>
+            </div>
+            <Link
+              href="/admin/stock"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <Package className="h-4 w-4" />
+              在庫管理
+            </Link>
+          </div>
         </header>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -380,6 +426,16 @@ export default function AdminReservationsPage() {
               </button>
             </div>
           </div>
+          {cancelRequestedCount > 0 && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                <p className="font-medium">
+                  キャンセル申請中の予約が {cancelRequestedCount} 件あります。該当のカードに「キャンセル申請中」のバッジが表示されています。
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -395,7 +451,7 @@ export default function AdminReservationsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {reservations.map((reservation) => {
+              {sortedReservations.map((reservation) => {
                 const visitTime = reservation.pickup_time || reservation.start_time || "--:--";
                 const inputs = ensureInputs(reservation);
                 const statusOptions = getStatusSequence(reservation);

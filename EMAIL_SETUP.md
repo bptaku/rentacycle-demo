@@ -36,7 +36,7 @@
 
 1. Resendダッシュボード → "API Keys"
 2. "Create API Key" をクリック
-3. 名前を入力（例: `rentacycle-production`）
+3. 名前を入力（例: `kisocycle-test`／本番なら `kisocycle-production`）
 4. 権限を選択：
    - **Full Access**（開発中はこれで問題ありません）
 5. "Add" をクリック
@@ -260,7 +260,54 @@ RESEND_FROM_EMAIL = noreply@yourdomain.com
 
 ## トラブルシューティング
 
-### メールが届かない場合
+### メールが届かない：原因と対処（ターミナルでは成功と出る場合）
+
+**症状**: 予約確認メール・お店への予約通知メールが届かないが、ターミナルやログでは「送信成功」と出ている。
+
+#### 原因1: 送信元が `onboarding@resend.dev` のまま（未設定）
+
+Resend では、**送信元（from）が `onboarding@resend.dev` のとき**は、  
+**Resend にサインアップしたメールアドレスにしか送れません**。  
+それ以外のアドレス（お客様のメールやお店の別アドレス）には届きません。
+
+- **お客様への予約確認メール**: 予約フォームで入力したメールアドレスが、Resend のサインアップアドレスと**同じ**なら届く。違うと届かない。
+- **お店への通知メール**: `RESEND_SHOP_EMAIL` が Resend のサインアップアドレスと**同じ**なら届く。違うと届かない。
+
+**対処**:
+
+1. **ドメインを追加・検証する**  
+   Resend ダッシュボード → **Domains** → **Add Domain** でドメインを追加し、表示される DNS レコード（SPF/DKIM など）を設定して検証する。
+
+2. **環境変数を設定する**  
+   `.env.local`（および Vercel の環境変数）に次を設定する：
+   - `RESEND_FROM_EMAIL=noreply@あなたの検証済みドメイン`  
+     例: `noreply@yourdomain.com`（Resend で検証したドメイン）
+   - お店への通知用: `RESEND_SHOP_EMAIL=shop@yourdomain.com`（届け先のメールアドレス）
+
+3. **開発サーバーを再起動する**  
+   `.env.local` を変更したら `npm run dev` をやり直す。
+
+ドメインを検証し、`RESEND_FROM_EMAIL` を検証済みドメインのアドレスにすれば、**任意の宛先**（お客様・お店）に送信できるようになります。
+
+#### 原因2: お店への通知用メールアドレスが未設定
+
+お店宛ての「新しい予約が入りました」メールは、**`RESEND_SHOP_EMAIL`** に送られます。  
+この環境変数が未設定だと、お店宛てメールは送信されません（コード内でスキップされます）。
+
+**対処**:  
+`.env.local` に `RESEND_SHOP_EMAIL=お店で受け取りたいメールアドレス` を追加する。
+
+#### 原因3: Resend API が 403 を返しているがログに出ていない
+
+以前のコードでは、Resend が「この宛先には送れません」と 403 を返しても、レスポンスの `error` を見ておらず「成功」と表示していました。  
+**今回の修正後**は、Resend がエラーを返すとターミナルに  
+`📧 メール送信エラー（Resend API）` と **error / statusCode** が出力されます。
+
+- ログに **validation_error** や **You can only send testing emails to your own email address** と出ている場合 → 上記「原因1」のとおりドメイン検証と `RESEND_FROM_EMAIL` の設定を行う。
+
+---
+
+### メールが届かない場合（その他）
 
 1. **迷惑メールフォルダーを確認**
    - 開発環境では `@resend.dev` からのメールは迷惑メールになることがあります

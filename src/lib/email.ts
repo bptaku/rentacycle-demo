@@ -21,6 +21,31 @@ export interface ReservationEmailData {
   totalPrice: number;
 }
 
+interface CancelNotificationEmailData {
+  reservationId: string;
+  name: string;
+  email: string | null;
+  plan: string;
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+  pickupTime: string | null;
+  totalPrice: number;
+  cancelReason: string | null;
+}
+
+interface CancelApprovedEmailData {
+  reservationId: string;
+  name: string;
+  email: string | null;
+  plan: string;
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+  pickupTime: string | null;
+  totalPrice: number;
+}
+
 const BIKE_TYPE_LABELS: Record<string, string> = {
   // キッズ
   "キッズ20インチ": "キッズ 20インチ（約115cm〜）",
@@ -32,17 +57,18 @@ const BIKE_TYPE_LABELS: Record<string, string> = {
   "クロスバイク M": "クロスバイク M（165〜177cm）",
   "クロスバイク XL": "クロスバイク XL（180〜195cm）",
   // ロードバイク
-  "ロードバイク M": "ロードバイク M",
-  "ロードバイク L": "ロードバイク L",
-  // 電動A（シティ）
-  "電動A S": "電動A（シティ） S（146cm〜170cm）",
-  "電動A M": "電動A（シティ） M（153cm〜185cm前後）",
-  // 電動B（スポーティ）
-  "電動B M": "電動B（スポーティ） M（156cm〜180cm前後）",
-  "電動B チャイルドシート": "電動B（スポーティ） チャイルドシート付き",
-  // 電動C（スポーツ）
-  "電動C M": "電動C（スポーツ） M（170cm〜182cm前後）",
-  "電動C L": "電動C（スポーツ） L",
+  "ロードバイク S": "ロードバイク S（165〜172cm）",
+  "ロードバイク M": "ロードバイク M（170〜180cm）",
+  "ロードバイク L": "ロードバイク L（177〜193cm）",
+  // 電動A
+  "電動A S": "電動A S（146cm〜170cm）",
+  "電動A M": "電動A M（153cm〜185cm）",
+  // 電動B
+  "電動B M": "電動B M（156cm〜180cm）",
+  "電動B チャイルドシート": "電動B チャイルドシート付き",
+  // 電動C
+  "電動C S": "電動C S（162〜172cm）",
+  "電動C M": "電動C M（170〜182cm）",
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -81,7 +107,12 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
 
   const planName = PLAN_LABELS[data.plan] || data.plan;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-  
+  if (fromEmail === "onboarding@resend.dev") {
+    console.warn(
+      "⚠️ RESEND_FROM_EMAIL が未設定のため onboarding@resend.dev から送信しています。届かない場合は「原因と対処」をプロジェクトルートの EMAIL_SETUP.md で確認してください。"
+    );
+  }
+
   // キャンセル申請リンクのベースURL
   // 本番環境ではNEXT_PUBLIC_BASE_URLを設定、開発環境ではlocalhost
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
@@ -131,6 +162,21 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
       text: emailText,
     });
 
+    const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
+    if (resendError) {
+      console.error(`📧 メール送信エラー（Resend API）:`, {
+        reservationId: data.reservationId,
+        email: data.email,
+        fromEmail,
+        error: resendError.message || resendError,
+        statusCode: resendError.statusCode,
+      });
+      return {
+        success: false,
+        error: resendError.message || "Failed to send email",
+      };
+    }
+
     const emailId = (response as { data?: { id?: string | null } | null })?.data?.id ?? null;
 
     // 詳細なログ出力（Vercelで確認できるように）
@@ -153,6 +199,242 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
       errorStack: error?.stack,
     });
     return { success: false, error: error?.message || "Failed to send email" };
+  }
+}
+
+export async function sendReservationCreatedNotificationEmailToShop(
+  data: ReservationEmailData
+) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const toEmail = process.env.RESEND_SHOP_EMAIL;
+
+  if (!apiKey || !toEmail) {
+    console.error(
+      "❌ RESEND_API_KEY or RESEND_SHOP_EMAIL is not set. Skipping reservation created notification email."
+    );
+    return { success: false, error: "Email service not configured" };
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  if (fromEmail === "onboarding@resend.dev") {
+    console.warn(
+      "⚠️ RESEND_FROM_EMAIL が未設定です。お店への通知メールもドメイン未検証の場合は届かないことがあります。"
+    );
+  }
+  const planName = PLAN_LABELS[data.plan] || data.plan;
+
+  const reservationIdShort = data.reservationId
+    ? String(data.reservationId).slice(0, 8)
+    : data.reservationId;
+
+  const bikeLines = Object.entries(data.bikes)
+    .filter(([, count]) => count > 0)
+    .map(
+      ([bikeType, count]) =>
+        `・${BIKE_TYPE_LABELS[bikeType] || bikeType} × ${count}台`
+    );
+
+  try {
+    const response = await resend.emails.send({
+      from: fromEmail,
+      to: toEmail,
+      subject: `【管理用】新しい予約が入りました（予約番号: ${reservationIdShort}）`,
+      text: [
+        "新しい予約が確定しました。",
+        "",
+        `予約番号: ${reservationIdShort}`,
+        `お名前: ${data.name}`,
+        `お客様メールアドレス: ${data.email}`,
+        "",
+        `プラン: ${planName}`,
+        `貸出日: ${data.startDate}${
+          data.startTime
+            ? ` ${data.startTime} 開始`
+            : data.pickupTime
+            ? ` ${data.pickupTime} 来店予定`
+            : ""
+        }`,
+        `返却日: ${data.endDate}`,
+        "",
+        "【自転車】",
+        ...(bikeLines.length > 0 ? bikeLines : ["自転車の予約はありません"]),
+        "",
+        `合計金額: ¥${data.totalPrice.toLocaleString()}`,
+      ].join("\n"),
+    });
+
+    const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
+    if (resendError) {
+      console.error("📧 予約作成通知メール送信エラー（Resend API）", {
+        reservationId: data.reservationId,
+        toEmail,
+        error: resendError.message || resendError,
+        statusCode: resendError.statusCode,
+      });
+      return { success: false, error: resendError.message || "Failed to send reservation created notification email" };
+    }
+
+    const emailId = (response as { data?: { id?: string | null } | null })?.data?.id ?? null;
+    console.log("📧 予約作成通知メール送信成功", {
+      reservationId: data.reservationId,
+      toEmail,
+      emailId,
+    });
+
+    return { success: true, id: emailId };
+  } catch (error: any) {
+    console.error("📧 予約作成通知メール送信エラー", {
+      reservationId: data.reservationId,
+      toEmail,
+      error: error?.message || error,
+      errorStack: error?.stack,
+    });
+    return { success: false, error: error?.message || "Failed to send reservation created notification email" };
+  }
+}
+
+export async function sendCancelRequestNotificationEmail(
+  data: CancelNotificationEmailData
+) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const toEmail = process.env.RESEND_SHOP_EMAIL;
+
+  if (!apiKey || !toEmail) {
+    console.error("❌ RESEND_API_KEY or RESEND_SHOP_EMAIL is not set. Skipping cancel notification email.");
+    return { success: false, error: "Email service not configured" };
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  const planName = PLAN_LABELS[data.plan] || data.plan;
+  const reservationIdShort = data.reservationId
+    ? String(data.reservationId).slice(0, 8)
+    : data.reservationId;
+
+  try {
+    const response = await resend.emails.send({
+      from: fromEmail,
+      to: toEmail,
+      subject: `【管理用】キャンセル申請が届きました（予約番号: ${reservationIdShort}）`,
+      text: [
+        "以下の予約でキャンセル申請が行われました。",
+        "",
+        `予約番号: ${reservationIdShort}`,
+        `お名前: ${data.name}`,
+        `メールアドレス: ${data.email ?? "-"}`,
+        "",
+        `プラン: ${planName}`,
+        `貸出日: ${data.startDate}${data.startTime ? ` ${data.startTime}` : data.pickupTime ? ` ${data.pickupTime} 来店予定` : ""}`,
+        `返却日: ${data.endDate}`,
+        `合計金額: ¥${data.totalPrice.toLocaleString()}`,
+        "",
+        "【キャンセル理由】",
+        data.cancelReason ? data.cancelReason : "（未入力）",
+        "",
+        "管理画面の予約一覧から「キャンセル申請を承認」ボタンを押すとキャンセルが確定し、在庫が自動的に復元されます。",
+      ].join("\n"),
+    });
+
+    const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
+    if (resendError) {
+      console.error("📧 キャンセル申請通知メール送信エラー（Resend API）", {
+        reservationId: data.reservationId,
+        toEmail,
+        error: resendError.message || resendError,
+        statusCode: resendError.statusCode,
+      });
+      return { success: false, error: resendError.message || "Failed to send cancel notification email" };
+    }
+
+    const emailId = (response as { data?: { id?: string | null } | null })?.data?.id ?? null;
+    console.log("📧 キャンセル申請通知メール送信成功", {
+      reservationId: data.reservationId,
+      toEmail,
+      emailId,
+    });
+
+    return { success: true, id: emailId };
+  } catch (error: any) {
+    console.error("📧 キャンセル申請通知メール送信エラー", {
+      reservationId: data.reservationId,
+      toEmail,
+      error: error?.message || error,
+      errorStack: error?.stack,
+    });
+    return { success: false, error: error?.message || "Failed to send cancel notification email" };
+  }
+}
+
+export async function sendCancelApprovedEmailToCustomer(
+  data: CancelApprovedEmailData
+) {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey || !data.email) {
+    console.error("❌ RESEND_API_KEY is not set or reservation has no email. Skipping cancel-approved email.");
+    return { success: false, error: "Email service not configured or missing customer email" };
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  const planName = PLAN_LABELS[data.plan] || data.plan;
+  const reservationIdShort = data.reservationId
+    ? String(data.reservationId).slice(0, 8)
+    : data.reservationId;
+
+  try {
+    const response = await resend.emails.send({
+      from: fromEmail,
+      to: data.email,
+      subject: `【レンタサイクル】キャンセルが確定しました（予約番号: ${reservationIdShort}）`,
+      text: [
+        `${data.name} 様`,
+        "",
+        "この度はキャンセルのお手続きをいただきありがとうございます。",
+        "以下のご予約のキャンセルが確定しましたのでお知らせいたします。",
+        "",
+        `予約番号: ${reservationIdShort}`,
+        `プラン: ${planName}`,
+        `貸出日: ${data.startDate}${data.startTime ? ` ${data.startTime}` : data.pickupTime ? ` ${data.pickupTime} 来店予定` : ""}`,
+        `返却日: ${data.endDate}`,
+        `合計金額: ¥${data.totalPrice.toLocaleString()}`,
+        "",
+        "またのご利用を心よりお待ちしております。",
+        "",
+        "---",
+        "このメールは自動送信されています。",
+        "本メールに心当たりがない場合は、お手数ですが削除してください。",
+      ].join("\n"),
+    });
+
+    const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
+    if (resendError) {
+      console.error("📧 キャンセル確定メール送信エラー（Resend API）", {
+        reservationId: data.reservationId,
+        email: data.email,
+        error: resendError.message || resendError,
+        statusCode: resendError.statusCode,
+      });
+      return { success: false, error: resendError.message || "Failed to send cancel-approved email" };
+    }
+
+    const emailId = (response as { data?: { id?: string | null } | null })?.data?.id ?? null;
+    console.log("📧 キャンセル確定メール送信成功", {
+      reservationId: data.reservationId,
+      email: data.email,
+      emailId,
+    });
+
+    return { success: true, id: emailId };
+  } catch (error: any) {
+    console.error("📧 キャンセル確定メール送信エラー", {
+      reservationId: data.reservationId,
+      email: data.email,
+      error: error?.message || error,
+      errorStack: error?.stack,
+    });
+    return { success: false, error: error?.message || "Failed to send cancel-approved email" };
   }
 }
 

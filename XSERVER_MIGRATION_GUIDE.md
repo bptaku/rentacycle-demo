@@ -243,8 +243,8 @@ nvm use 20
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/your-username/rentacycle-demo.git
-cd rentacycle-demo
+git clone https://github.com/your-username/kisocycle-test.git
+cd kisocycle-test
 
 # 依存関係をインストール
 npm install
@@ -264,7 +264,7 @@ cp env.example .env.local
 npm install -g pm2
 
 # アプリを起動
-pm2 start npm --name "rentacycle" -- start
+pm2 start npm --name "kisocycle-test" -- start
 
 # 自動起動を設定
 pm2 startup
@@ -280,7 +280,7 @@ sudo yum install nginx  # CentOS系の場合
 sudo apt install nginx  # Ubuntu系の場合
 
 # Nginx設定ファイルを作成
-sudo nano /etc/nginx/sites-available/rentacycle
+sudo nano /etc/nginx/sites-available/kisocycle-test
 ```
 
 Nginx設定例:
@@ -452,7 +452,7 @@ GitHub Actionsで自動デプロイを設定するか、手動でデプロイす
 ### 選択肢C: 別ドメインを使う
 
 **既存サイト:** `https://yourdomain.com`（Xサーバー）  
-**予約システム:** `https://rentacycle.yourdomain.com`（Vercel）
+**予約システム:** `https://kisocycle-test.yourdomain.com`（Vercel・テスト環境）
 
 新しいドメインを取得するか、サブドメインを使用。
 
@@ -466,7 +466,7 @@ GitHub Actionsで自動デプロイを設定するか、手動でデプロイす
    - トップページ、会社情報、アクセスなど
    
 2. **予約システム（Vercel）**: サブドメインで運用
-   - `https://reserve.yourdomain.com` または `https://rentacycle.yourdomain.com`
+   - `https://reserve.yourdomain.com` または `https://kisocycle-test.yourdomain.com`
 
 **メリット:**
 - ✅ 既存サイトに一切影響なし

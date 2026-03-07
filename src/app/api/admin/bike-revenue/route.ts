@@ -3,10 +3,10 @@ import { supabaseServer } from "@/utils/supabase/server";
 
 const PRICE_TABLE = {
   クロス: { "6h": 2500, "1d": 3500, "2d_plus": 6500, addDay: 2700 },
-  ロード: { "6h": 3000, "1d": 4000, "2d_plus": 7500, addDay: 3000 },
+  ロード: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動A: { "6h": 3500, "1d": 4500, "2d_plus": 8500, addDay: 3600 },
   電動B: { "6h": 4500, "1d": 5500, "2d_plus": 11000, addDay: 4500 },
-  電動C: { "6h": 7500, "1d": 8500, "2d_plus": 12000, addDay: 5000 },
+  電動C: { "6h": 7500, "1d": 8500, "2d_plus": 17000, addDay: 7500 },
   キッズ: { "6h": 500, "1d": 500, "2d_plus": 1000, addDay: 500 },
 };
 
@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
       const bikes = parseJson<Record<string, number>>(reservation.bikes, {});
       const bikeNumbers = parseJson<Record<string, string[]>>(reservation.bike_numbers, {});
 
+      // 基本料金（自転車のみ）の小計。割引は自転車分にのみ適用される前提
       const baseSubtotal = Object.entries(bikes).reduce((sum, [bikeType, count]) => {
         if (!count) return sum;
         return (
@@ -138,7 +139,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       status: "ok",
-      data: Object.values(revenueByBike).sort((a, b) => b.total_revenue - a.total_revenue),
+      data: Object.values(revenueByBike).sort((a, b) => {
+        const numA = Number(a.bike_number);
+        const numB = Number(b.bike_number);
+        if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB;
+        if (!Number.isNaN(numA)) return -1;
+        if (!Number.isNaN(numB)) return 1;
+        return String(a.bike_number).localeCompare(String(b.bike_number), undefined, { numeric: true });
+      }),
     });
   } catch (error: any) {
     console.error("[GET /api/admin/bike-revenue]", error?.message || error);

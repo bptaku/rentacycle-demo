@@ -1,7 +1,7 @@
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseServer } from "@/utils/supabase/server";
 
 export async function GET() {
-  const { data, error } = await supabase.from("reservations").select("*").limit(1);
+  const { data, error } = await supabaseServer.from("reservations").select("*").limit(1);
   if (error) {
     return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500 });
   }
