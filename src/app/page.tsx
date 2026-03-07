@@ -1659,6 +1659,7 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
                       insurance_price: insurancePrice,
                       name: customerName.trim(),
                       email: customerEmail.trim(),
+                      locale,
                     };
 
                     const res = await fetch("/api/reserve", {

@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { getPlanLabels, getBikeTypeLabels, getInsurancePlans } from "@/lib/reservation-i18n";
+import type { ReservationLocale } from "@/lib/reservation-i18n";
 
 export interface ReservationEmailData {
   reservationId: string;
@@ -19,6 +21,8 @@ export interface ReservationEmailData {
   dropoffPrice: number;
   discount: number;
   totalPrice: number;
+  /** 予約時の言語。en ならメール本文を英語で送る */
+  locale?: ReservationLocale;
 }
 
 interface CancelNotificationEmailData {
@@ -91,6 +95,101 @@ const INSURANCE_DESCRIPTIONS: Record<string, string> = {
   C: "車両価格の50%まで保障",
 };
 
+/** 予約確認メールの文言（言語別） */
+const EMAIL_COPY_JA = {
+  subjectPrefix: "【レンタサイクル】ご予約ありがとうございます（予約番号: ",
+  subjectSuffix: "）",
+  headerTitle: "ご予約ありがとうございます",
+  sectionRecipient: "ご予約者様",
+  nameSuffix: " 様",
+  intro: "この度はレンタサイクルをご予約いただき、誠にありがとうございます。",
+  sectionReservationNumber: "予約番号",
+  reservationNumberNote: "予約の確認やお問い合わせの際に必要となります。",
+  sectionPlan: "プラン",
+  sectionPickup: "貸出日時",
+  startSuffix: " 開始",
+  pickupSuffix: " 来店予定",
+  returnLabel: "返却日: ",
+  sectionDetails: "ご予約内容",
+  noBikes: "自転車のご予約はありません",
+  optionsLabel: "オプション",
+  sectionPrice: "料金内訳",
+  subtotal: "基本料金",
+  options: "オプション",
+  dropoff: "ドロップオフ",
+  insurance: "車両補償",
+  discount: "割引",
+  total: "合計",
+  sectionVisit: "ご来店について",
+  visitBody: "ご予約いただいた日時に、お店までお越しください。",
+  visitContact: "ご不明な点がございましたら、お気軽にお問い合わせください。",
+  sectionCancel: "キャンセルをご希望の場合",
+  cancelIntro: "予約のキャンセルをご希望の場合は、以下のリンクからキャンセル申請をお願いいたします。",
+  cancelButton: "キャンセル申請はこちら",
+  cancelNote: "※ キャンセル申請後、お店で承認が必要です。承認され次第、確認メールをお送りします。",
+  footerAuto: "このメールは自動送信されています。",
+  footerNoReply: "本メールに心当たりがない場合は、お手数ですが削除してください。",
+  textIntro: "以下の内容で予約を承りました。",
+  textReservationNumber: "【予約番号】",
+  textPlan: "【プラン】",
+  textPickup: "【貸出日時】",
+  textDetails: "【ご予約内容】",
+  textOptions: "【オプション】",
+  textPrice: "【料金内訳】",
+  textVisit: "【ご来店について】",
+  textCancel: "【キャンセルをご希望の場合】",
+  textCancelIntro: "予約のキャンセルをご希望の場合は、以下のURLからキャンセル申請をお願いいたします。",
+};
+
+const EMAIL_COPY_EN = {
+  subjectPrefix: "[Bike Rental] Thank you for your reservation (Reservation #: ",
+  subjectSuffix: ")",
+  headerTitle: "Thank you for your reservation",
+  sectionRecipient: "Guest",
+  nameSuffix: "",
+  intro: "Thank you for booking with us. Your reservation has been confirmed.",
+  sectionReservationNumber: "Reservation number",
+  reservationNumberNote: "You will need this number when you visit.",
+  sectionPlan: "Plan",
+  sectionPickup: "Pick-up date & time",
+  startSuffix: " start",
+  pickupSuffix: " pick-up (approx.)",
+  returnLabel: "Return date: ",
+  sectionDetails: "Reservation details",
+  noBikes: "No bikes reserved.",
+  optionsLabel: "Options",
+  sectionPrice: "Price breakdown",
+  subtotal: "Subtotal",
+  options: "Options",
+  dropoff: "Drop-off",
+  insurance: "Insurance",
+  discount: "Discount",
+  total: "Total",
+  sectionVisit: "When you visit",
+  visitBody: "Please come to the shop at the date and time above.",
+  visitContact: "If you have any questions, please contact us.",
+  sectionCancel: "To cancel",
+  cancelIntro: "To request a cancellation, please use the link below.",
+  cancelButton: "Request cancellation",
+  cancelNote: "Cancellation will be confirmed after we approve your request. You will receive a confirmation email.",
+  footerAuto: "This is an automated message.",
+  footerNoReply: "If you did not make this reservation, please disregard this email.",
+  textIntro: "Your reservation details are below.",
+  textReservationNumber: "[Reservation number]",
+  textPlan: "[Plan]",
+  textPickup: "[Pick-up]",
+  textDetails: "[Details]",
+  textOptions: "[Options]",
+  textPrice: "[Price breakdown]",
+  textVisit: "[When you visit]",
+  textCancel: "[To cancel]",
+  textCancelIntro: "To request a cancellation, please use the URL below.",
+};
+
+function getEmailCopy(locale: ReservationLocale): typeof EMAIL_COPY_JA {
+  return locale === "en" ? EMAIL_COPY_EN : EMAIL_COPY_JA;
+}
+
 /** Vercel 上で Resend API への接続が一時的に失敗した場合にリトライする（DNS/ネットワーク障害対策） */
 function isRetryableNetworkError(error: unknown): boolean {
   const msg = String(error instanceof Error ? error.message : error).toLowerCase();
@@ -149,7 +248,13 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
 
   const resend = new Resend(apiKey);
 
-  const planName = PLAN_LABELS[data.plan] || data.plan;
+  const locale: ReservationLocale = data.locale === "en" ? "en" : "ja";
+  const copy = getEmailCopy(locale);
+  const planLabels = getPlanLabels(locale);
+  const bikeTypeLabels = getBikeTypeLabels(locale);
+  const insurancePlans = getInsurancePlans(locale);
+
+  const planName = planLabels[data.plan as keyof typeof planLabels] || data.plan;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
   if (fromEmail === "onboarding@resend.dev") {
     console.warn(
@@ -163,46 +268,47 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const cancelUrl = `${baseUrl}/cancel/${data.reservationId}`;
 
+  const unitBikes = locale === "en" ? "bikes" : "台";
   const bikeLines = Object.entries(data.bikes)
     .filter(([_, count]) => count > 0)
     .map(
       ([bikeType, count]) =>
-        `・${BIKE_TYPE_LABELS[bikeType] || bikeType} × ${count}台`
+        `・${bikeTypeLabels[bikeType] || bikeType} × ${count}${locale === "en" ? " " : ""}${unitBikes}`
     );
 
   const optionLines: string[] = [];
   if (data.dropoff) {
-    optionLines.push(`・ドロップオフサービス: ¥${data.dropoffPrice.toLocaleString()}`);
+    optionLines.push(`・${locale === "en" ? "Drop-off service" : "ドロップオフサービス"}: ¥${data.dropoffPrice.toLocaleString()}`);
   }
   if (data.insurancePlan && data.insurancePlan !== "none") {
+    const insPlan = insurancePlans.find((p) => p.id === data.insurancePlan);
+    const insLabel = insPlan?.name ?? data.insurancePlan;
     optionLines.push(
-      `・車両補償（${INSURANCE_LABELS[data.insurancePlan] || data.insurancePlan}）: ¥${data.insurancePrice.toLocaleString()}`
+      `・${copy.insurance}（${insLabel}）: ¥${data.insurancePrice.toLocaleString()}`
     );
   }
 
-  const emailHtml = buildEmailHtml({
+  const templateParams = {
     ...data,
+    locale,
+    copy,
     planName,
     bikeLines,
     optionLines,
     cancelUrl,
-  });
-  const emailText = buildEmailText({
-    ...data,
-    planName,
-    bikeLines,
-    optionLines,
-    cancelUrl,
-  });
+  };
+
+  const emailHtml = buildEmailHtml(templateParams);
+  const emailText = buildEmailText(templateParams);
+
+  const reservationIdShort = data.reservationId ? String(data.reservationId).slice(0, 8) : "";
 
   try {
     const response = await withResendRetry(async () => {
       const res = await resend.emails.send({
         from: fromEmail,
         to: data.email,
-        subject: `【レンタサイクル】ご予約ありがとうございます（予約番号: ${
-          data.reservationId.split("-")[0]
-        }）`,
+        subject: `${copy.subjectPrefix}${reservationIdShort}${copy.subjectSuffix}`,
         html: emailHtml,
         text: emailText,
       });
@@ -498,6 +604,8 @@ export async function sendCancelApprovedEmailToCustomer(
 }
 
 type TemplateParams = ReservationEmailData & {
+  locale: ReservationLocale;
+  copy: typeof EMAIL_COPY_JA;
   planName: string;
   bikeLines: string[];
   optionLines: string[];
@@ -522,10 +630,13 @@ function buildEmailHtml(params: TemplateParams) {
     discount,
     totalPrice,
     cancelUrl,
+    copy,
   } = params;
 
   // 予約番号を短い形式に（最初の8文字）
   const reservationIdShort = reservationId ? String(reservationId).slice(0, 8) : reservationId;
+
+  const startOrPickup = startTime ? `${startTime}${copy.startSuffix}` : pickupTime ? `${pickupTime}${copy.pickupSuffix}` : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -618,71 +729,71 @@ function buildEmailHtml(params: TemplateParams) {
     <div class="wrapper">
       <div class="card">
         <div class="header">
-          <h1>ご予約ありがとうございます</h1>
+          <h1>${copy.headerTitle}</h1>
         </div>
         <div class="section">
-          <div class="section-title">ご予約者様</div>
-          <p>${name} 様</p>
-          <p>この度はレンタサイクルをご予約いただき、誠にありがとうございます。</p>
+          <div class="section-title">${copy.sectionRecipient}</div>
+          <p>${name}${copy.nameSuffix}</p>
+          <p>${copy.intro}</p>
         </div>
         <div class="section">
-          <div class="section-title">予約番号</div>
+          <div class="section-title">${copy.sectionReservationNumber}</div>
           <div class="reservation-id">${reservationIdShort}</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 6px;">
-            予約の確認やお問い合わせの際に必要となります。
+            ${copy.reservationNumberNote}
           </p>
         </div>
         <div class="section">
-          <div class="section-title">プラン</div>
+          <div class="section-title">${copy.sectionPlan}</div>
           <p>${planName}</p>
         </div>
         <div class="section">
-          <div class="section-title">貸出日時</div>
+          <div class="section-title">${copy.sectionPickup}</div>
           <p>
             ${startDate}
-            ${startTime ? ` ${startTime} 開始` : pickupTime ? ` ${pickupTime} 来店予定` : ""}
+            ${startOrPickup ? ` ${startOrPickup}` : ""}
           </p>
-          <p>返却日: ${endDate}</p>
+          <p>${copy.returnLabel}${endDate}</p>
         </div>
         <div class="section">
-          <div class="section-title">ご予約内容</div>
+          <div class="section-title">${copy.sectionDetails}</div>
           <div class="list">
-            ${bikeLines.length > 0 ? bikeLines.join("<br />") : "自転車のご予約はありません"}
-            ${optionLines.length > 0 ? `<br /><br /><strong>オプション</strong><br />${optionLines.join("<br />")}` : ""}
+            ${bikeLines.length > 0 ? bikeLines.join("<br />") : copy.noBikes}
+            ${optionLines.length > 0 ? `<br /><br /><strong>${copy.optionsLabel}</strong><br />${optionLines.join("<br />")}` : ""}
           </div>
         </div>
         <div class="section">
-          <div class="section-title">料金内訳</div>
+          <div class="section-title">${copy.sectionPrice}</div>
           <div class="list">
-            <div class="price-row"><span>基本料金</span><span>¥${subtotal.toLocaleString()}</span></div>
-            ${addonsPrice > 0 ? `<div class="price-row"><span>オプション</span><span>¥${addonsPrice.toLocaleString()}</span></div>` : ""}
-            ${dropoffPrice > 0 ? `<div class="price-row"><span>ドロップオフ</span><span>¥${dropoffPrice.toLocaleString()}</span></div>` : ""}
-            ${insurancePrice > 0 ? `<div class="price-row"><span>車両補償</span><span>¥${insurancePrice.toLocaleString()}</span></div>` : ""}
-            ${discount > 0 ? `<div class="price-row" style="color:#10b981;"><span>割引</span><span>-¥${discount.toLocaleString()}</span></div>` : ""}
-            <div class="total-row"><span>合計</span><span>¥${totalPrice.toLocaleString()}</span></div>
+            <div class="price-row"><span>${copy.subtotal}</span><span>¥${subtotal.toLocaleString()}</span></div>
+            ${addonsPrice > 0 ? `<div class="price-row"><span>${copy.options}</span><span>¥${addonsPrice.toLocaleString()}</span></div>` : ""}
+            ${dropoffPrice > 0 ? `<div class="price-row"><span>${copy.dropoff}</span><span>¥${dropoffPrice.toLocaleString()}</span></div>` : ""}
+            ${insurancePrice > 0 ? `<div class="price-row"><span>${copy.insurance}</span><span>¥${insurancePrice.toLocaleString()}</span></div>` : ""}
+            ${discount > 0 ? `<div class="price-row" style="color:#10b981;"><span>${copy.discount}</span><span>-¥${discount.toLocaleString()}</span></div>` : ""}
+            <div class="total-row"><span>${copy.total}</span><span>¥${totalPrice.toLocaleString()}</span></div>
           </div>
         </div>
         <div class="section">
-          <div class="section-title">ご来店について</div>
-          <p>ご予約いただいた日時に、お店までお越しください。</p>
-          <p>ご不明な点がございましたら、お気軽にお問い合わせください。</p>
+          <div class="section-title">${copy.sectionVisit}</div>
+          <p>${copy.visitBody}</p>
+          <p>${copy.visitContact}</p>
         </div>
         <div class="section">
-          <div class="section-title">キャンセルをご希望の場合</div>
-          <p>予約のキャンセルをご希望の場合は、以下のリンクからキャンセル申請をお願いいたします。</p>
+          <div class="section-title">${copy.sectionCancel}</div>
+          <p>${copy.cancelIntro}</p>
           <p style="margin-top: 12px;">
             <a href="${cancelUrl}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-              キャンセル申請はこちら
+              ${copy.cancelButton}
             </a>
           </p>
           <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">
-            ※ キャンセル申請後、お店で承認が必要です。承認され次第、確認メールをお送りします。
+            ${copy.cancelNote}
           </p>
         </div>
       </div>
       <div class="footer">
-        <p>このメールは自動送信されています。</p>
-        <p>本メールに心当たりがない場合は、お手数ですが削除してください。</p>
+        <p>${copy.footerAuto}</p>
+        <p>${copy.footerNoReply}</p>
       </div>
     </div>
   </body>
@@ -707,60 +818,61 @@ function buildEmailText(params: TemplateParams) {
     discount,
     totalPrice,
     cancelUrl,
+    copy,
   } = params;
 
   // 予約番号を短い形式に（最初の8文字）
   const reservationIdShort = reservationId ? String(reservationId).slice(0, 8) : reservationId;
 
+  const startOrPickup = startTime ? `${startTime}${copy.startSuffix}` : pickupTime ? `${pickupTime}${copy.pickupSuffix}` : "";
+
   const lines: string[] = [];
-  lines.push("ご予約ありがとうございます");
+  lines.push(copy.headerTitle);
   lines.push("");
-  lines.push(`${name} 様`);
+  lines.push(`${name}${copy.nameSuffix}`);
   lines.push("");
-  lines.push("この度はレンタサイクルをご予約いただき、誠にありがとうございます。");
-  lines.push("以下の内容で予約を承りました。");
+  lines.push(copy.intro);
+  lines.push(copy.textIntro);
   lines.push("");
-  lines.push("【予約番号}");
+  lines.push(copy.textReservationNumber);
   lines.push(reservationIdShort);
   lines.push("");
-  lines.push("【プラン】");
+  lines.push(copy.textPlan);
   lines.push(planName);
   lines.push("");
-  lines.push("【貸出日時】");
-  lines.push(
-    `${startDate}${startTime ? ` ${startTime} 開始` : pickupTime ? ` ${pickupTime} 来店予定` : ""}`
-  );
-  lines.push(`返却日: ${endDate}`);
+  lines.push(copy.textPickup);
+  lines.push(`${startDate}${startOrPickup ? ` ${startOrPickup}` : ""}`);
+  lines.push(`${copy.returnLabel}${endDate}`);
   lines.push("");
-  lines.push("【ご予約内容】");
-  lines.push(...(bikeLines.length > 0 ? bikeLines : ["自転車のご予約はありません"]));
+  lines.push(copy.textDetails);
+  lines.push(...(bikeLines.length > 0 ? bikeLines : [copy.noBikes]));
   if (optionLines.length > 0) {
     lines.push("");
-    lines.push("【オプション】");
+    lines.push(copy.textOptions);
     lines.push(...optionLines);
   }
   lines.push("");
-  lines.push("【料金内訳】");
-  lines.push(`基本料金: ¥${subtotal.toLocaleString()}`);
-  if (addonsPrice > 0) lines.push(`オプション: ¥${addonsPrice.toLocaleString()}`);
-  if (dropoffPrice > 0) lines.push(`ドロップオフ: ¥${dropoffPrice.toLocaleString()}`);
-  if (insurancePrice > 0) lines.push(`車両補償: ¥${insurancePrice.toLocaleString()}`);
-  if (discount > 0) lines.push(`割引: -¥${discount.toLocaleString()}`);
-  lines.push(`合計: ¥${totalPrice.toLocaleString()}`);
+  lines.push(copy.textPrice);
+  lines.push(`${copy.subtotal}: ¥${subtotal.toLocaleString()}`);
+  if (addonsPrice > 0) lines.push(`${copy.options}: ¥${addonsPrice.toLocaleString()}`);
+  if (dropoffPrice > 0) lines.push(`${copy.dropoff}: ¥${dropoffPrice.toLocaleString()}`);
+  if (insurancePrice > 0) lines.push(`${copy.insurance}: ¥${insurancePrice.toLocaleString()}`);
+  if (discount > 0) lines.push(`${copy.discount}: -¥${discount.toLocaleString()}`);
+  lines.push(`${copy.total}: ¥${totalPrice.toLocaleString()}`);
   lines.push("");
-  lines.push("【ご来店について】");
-  lines.push("ご予約いただいた日時に、お店までお越しください。");
-  lines.push("ご不明な点がございましたら、お気軽にお問い合わせください。");
+  lines.push(copy.textVisit);
+  lines.push(copy.visitBody);
+  lines.push(copy.visitContact);
   lines.push("");
-  lines.push("【キャンセルをご希望の場合】");
-  lines.push("予約のキャンセルをご希望の場合は、以下のURLからキャンセル申請をお願いいたします。");
+  lines.push(copy.textCancel);
+  lines.push(copy.textCancelIntro);
   lines.push(cancelUrl);
   lines.push("");
-  lines.push("※ キャンセル申請後、お店で承認が必要です。承認され次第、確認メールをお送りします。");
+  lines.push(copy.cancelNote);
   lines.push("");
   lines.push("---");
-  lines.push("このメールは自動送信されています。");
-  lines.push("本メールに心当たりがない場合は、お手数ですが削除してください。");
+  lines.push(copy.footerAuto);
+  lines.push(copy.footerNoReply);
 
   return lines.join("\n");
 }

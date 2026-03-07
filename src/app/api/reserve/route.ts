@@ -98,7 +98,10 @@ export async function POST(req: Request) {
       name,
       email,
       paid = false,
+      locale: localeParam,
     } = body;
+
+    const locale = localeParam === "en" ? "en" : "ja";
 
     const start_time =
       raw_start_time && String(raw_start_time).trim() ? String(raw_start_time).trim() : null;
@@ -283,6 +286,7 @@ export async function POST(req: Request) {
         dropoffPrice: dropoff_price || 0,
         discount: discount || 0,
         totalPrice: total_price || 0,
+        locale,
       } as const;
 
       const emailResult = await sendReservationConfirmationEmail(emailPayload);
