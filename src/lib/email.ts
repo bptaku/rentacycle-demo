@@ -91,7 +91,42 @@ const INSURANCE_DESCRIPTIONS: Record<string, string> = {
   C: "車両価格の50%まで保障",
 };
 
-export async function sendReservationConfirmationEmail(data: ReservationEmailData) {
+/** Vercel 上で Resend API への接続が一時的に失敗した場合にリトライする（DNS/ネットワーク障害対策） */
+function isRetryableNetworkError(error: unknown): boolean {
+  const msg = String(error instanceof Error ? error.message : error).toLowerCase();
+  return (
+    msg.includes("could not be resolved") ||
+    msg.includes("unable to fetch") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout") ||
+    msg.includes("fetch failed") ||
+    msg.includes("network")
+  );
+}
+
+async function withResendRetry<T>(
+  fn: () => Promise<T>,
+  options: { maxAttempts?: number; delayMs?: number } = {}
+): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? 3;
+  const delayMs = options.delayMs ?? 2000;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const isRetryable = attempt < maxAttempts && isRetryableNetworkError(error);
+      if (isRetryable) {
+        console.warn(`📧 Resend リトライ (${attempt}/${maxAttempts}):`, (error as Error)?.message);
+        await new Promise((r) => setTimeout(r, delayMs));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error("❌ RESEND_API_KEY is not set. Skipping email sending.");
@@ -152,28 +187,36 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
   });
 
   try {
-    const response = await resend.emails.send({
-      from: fromEmail,
-      to: data.email,
-      subject: `【レンタサイクル】ご予約ありがとうございます（予約番号: ${
-        data.reservationId.split("-")[0]
-      }）`,
-      html: emailHtml,
-      text: emailText,
+    const response = await withResendRetry(async () => {
+      const res = await resend.emails.send({
+        from: fromEmail,
+        to: data.email,
+        subject: `【レンタサイクル】ご予約ありがとうございます（予約番号: ${
+          data.reservationId.split("-")[0]
+        }）`,
+        html: emailHtml,
+        text: emailText,
+      });
+      const err = (res as { error?: { message?: string } | null })?.error;
+      if (err && isRetryableNetworkError(err.message ?? "")) {
+        throw new Error(err.message ?? "Resend request failed");
+      }
+      return res;
     });
 
     const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
     if (resendError) {
+      const errMsg = resendError.message || String(resendError);
       console.error(`📧 メール送信エラー（Resend API）:`, {
         reservationId: data.reservationId,
         email: data.email,
         fromEmail,
-        error: resendError.message || resendError,
+        error: errMsg,
         statusCode: resendError.statusCode,
       });
       return {
         success: false,
-        error: resendError.message || "Failed to send email",
+        error: errMsg || "Failed to send email",
       };
     }
 
@@ -236,32 +279,39 @@ export async function sendReservationCreatedNotificationEmailToShop(
     );
 
   try {
-    const response = await resend.emails.send({
-      from: fromEmail,
-      to: toEmail,
-      subject: `【管理用】新しい予約が入りました（予約番号: ${reservationIdShort}）`,
-      text: [
-        "新しい予約が確定しました。",
-        "",
-        `予約番号: ${reservationIdShort}`,
-        `お名前: ${data.name}`,
-        `お客様メールアドレス: ${data.email}`,
-        "",
-        `プラン: ${planName}`,
-        `貸出日: ${data.startDate}${
-          data.startTime
-            ? ` ${data.startTime} 開始`
-            : data.pickupTime
-            ? ` ${data.pickupTime} 来店予定`
-            : ""
-        }`,
-        `返却日: ${data.endDate}`,
-        "",
-        "【自転車】",
-        ...(bikeLines.length > 0 ? bikeLines : ["自転車の予約はありません"]),
-        "",
-        `合計金額: ¥${data.totalPrice.toLocaleString()}`,
-      ].join("\n"),
+    const response = await withResendRetry(async () => {
+      const res = await resend.emails.send({
+        from: fromEmail,
+        to: toEmail,
+        subject: `【管理用】新しい予約が入りました（予約番号: ${reservationIdShort}）`,
+        text: [
+          "新しい予約が確定しました。",
+          "",
+          `予約番号: ${reservationIdShort}`,
+          `お名前: ${data.name}`,
+          `お客様メールアドレス: ${data.email}`,
+          "",
+          `プラン: ${planName}`,
+          `貸出日: ${data.startDate}${
+            data.startTime
+              ? ` ${data.startTime} 開始`
+              : data.pickupTime
+              ? ` ${data.pickupTime} 来店予定`
+              : ""
+          }`,
+          `返却日: ${data.endDate}`,
+          "",
+          "【自転車】",
+          ...(bikeLines.length > 0 ? bikeLines : ["自転車の予約はありません"]),
+          "",
+          `合計金額: ¥${data.totalPrice.toLocaleString()}`,
+        ].join("\n"),
+      });
+      const err = (res as { error?: { message?: string } | null })?.error;
+      if (err && isRetryableNetworkError(err.message ?? "")) {
+        throw new Error(err.message ?? "Resend request failed");
+      }
+      return res;
     });
 
     const resendError = (response as { error?: { message?: string; name?: string; statusCode?: number } | null })?.error;
