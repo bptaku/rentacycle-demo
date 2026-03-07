@@ -140,6 +140,13 @@ export async function sendReservationConfirmationEmail(data: ReservationEmailDat
     return { success: false, error: "Email service not configured" };
   }
 
+  console.log("📧 予約確認メール送信を開始:", {
+    reservationId: data.reservationId,
+    to: data.email,
+    hasApiKey: true,
+    fromEmail: process.env.RESEND_FROM_EMAIL || "(未設定→onboarding@resend.dev)",
+  });
+
   const resend = new Resend(apiKey);
 
   const planName = PLAN_LABELS[data.plan] || data.plan;
@@ -254,8 +261,8 @@ export async function sendReservationCreatedNotificationEmailToShop(
   const toEmail = process.env.RESEND_SHOP_EMAIL;
 
   if (!apiKey || !toEmail) {
-    console.error(
-      "❌ RESEND_API_KEY or RESEND_SHOP_EMAIL is not set. Skipping reservation created notification email."
+    console.warn(
+      "⚠️ RESEND_SHOP_EMAIL が未設定のため、お店への「新規予約」通知メールをスキップしました。（お客様への予約確認メールには影響しません）"
     );
     return { success: false, error: "Email service not configured" };
   }
