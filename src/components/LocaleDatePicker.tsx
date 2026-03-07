@@ -118,7 +118,9 @@ export default function LocaleDatePicker({
               type="button"
               onClick={() => {
                 const today = new Date();
-                onChange(formatDateForInput(today));
+                const toSet =
+                  minDate && today < minDate ? minDate : today;
+                onChange(formatDateForInput(toSet));
                 setOpen(false);
               }}
               className="rounded-lg px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"

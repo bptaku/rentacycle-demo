@@ -26,6 +26,7 @@ import {
   interpolate,
   getWeekdayShort,
 } from "@/lib/reservation-i18n";
+import { getMinBookingDateStr } from "@/lib/booking-date";
 
 /* =========================================================
    定義
@@ -851,6 +852,10 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
         setDate("");
         return;
       }
+      const minBookingDate = getMinBookingDateStr();
+      if (value < minBookingDate) {
+        return;
+      }
       const selected = new Date(value);
       if (Number.isNaN(selected.getTime())) {
         setDate(value);
@@ -975,6 +980,9 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
               <p className="text-sm text-slate-500">
                 {t.step2Desc}
               </p>
+              <p className="text-sm text-slate-500">
+                {t.minBookingDateNotice}
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -986,6 +994,7 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
                   value={date}
                   onChange={(value) => handleDateChange(value)}
                   locale={locale}
+                  min={getMinBookingDateStr()}
                   className="w-full"
                 />
                 {plan === "2d_plus" && (

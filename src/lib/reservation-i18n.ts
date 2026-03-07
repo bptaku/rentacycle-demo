@@ -103,6 +103,8 @@ export type ReservationTranslations = {
   plan2dSubtitle: string;
   plan2dNote: string;
   pickupDate: string;
+  /** 予約は2日後以降である旨の案内 */
+  minBookingDateNotice: string;
   rentalDays: string;
   returnDate: string;
   returnTime: string;
@@ -219,6 +221,7 @@ const JA: ReservationTranslations = {
   plan2dSubtitle: "泊まりがけ・ロングライドにおすすめ",
   plan2dNote: "2日目以降は1日ごとに追加料金が発生します",
   pickupDate: "貸出日",
+  minBookingDateNotice: "ご予約は2日後以降の日付から承っております。",
   rentalDays: "ご利用日数",
   returnDate: "返却予定日",
   returnTime: "返却予定",
@@ -336,6 +339,7 @@ const EN: ReservationTranslations = {
   plan2dSubtitle: "Multi-day and long rides",
   plan2dNote: "Additional charge per extra day",
   pickupDate: "Pick-up date",
+  minBookingDateNotice: "Reservations are available from 2 days ahead.",
   rentalDays: "Rental days",
   returnDate: "Return date",
   returnTime: "Return by",

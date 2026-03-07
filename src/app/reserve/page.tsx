@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AvailabilityChecker from "@/components/AvailabilityChecker";
+import { getMinBookingDateStr } from "@/lib/booking-date";
 
 export default function ReservePage() {
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -67,6 +68,7 @@ export default function ReservePage() {
               id="startDate"
               name="startDate"
               type="date"
+              min={getMinBookingDateStr()}
               value={startDate ?? ""}
               onChange={(e) =>
                 setStartDate(e.target.value ? e.target.value : null)
@@ -95,6 +97,7 @@ export default function ReservePage() {
             />
           </div>
         </div>
+        <p className="text-sm text-gray-500">ご予約は2日後以降の日付から承っております。</p>
 
         {/* 台数 */}
         <div>

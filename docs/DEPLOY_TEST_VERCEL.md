@@ -64,6 +64,7 @@ Vercel Dashboard → 対象プロジェクト → **Settings → Environment Var
 - **URL**: `https://あなたのプロジェクト名.vercel.app`
 - **管理画面**: `https://あなたのプロジェクト名.vercel.app/admin`
 - **ログイン**: 環境変数で設定した `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASSWORD` を共有（パスワードは安全な方法で）
+- **確認用説明書**: **`docs/CLIENT_CHECK_GUIDE.md`** を共有する（URL・ログイン情報を追記してから PDF やメールで送付するとよい）
 
 クライアントに確認してもらう項目は **`docs/TEST_GUIDE_PRELAUNCH.md`** の Step 2〜5 を参考にしてください。  
 （トップ→予約→メールのキャンセルリンク→管理画面での承認まで一通り）

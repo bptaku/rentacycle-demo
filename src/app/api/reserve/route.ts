@@ -3,6 +3,7 @@ import {
   sendReservationConfirmationEmail,
   sendReservationCreatedNotificationEmailToShop,
 } from "@/lib/email";
+import { isStartDateAllowed } from "@/lib/booking-date";
 import { NextResponse } from "next/server";
 
 function createDateFromInput(dateStr: string | null): Date | null {
@@ -107,6 +108,13 @@ export async function POST(req: Request) {
     if (!plan || !start_date || !end_date || !bikes || Object.keys(bikes).length === 0) {
       return Response.json(
         { success: false, message: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (!isStartDateAllowed(start_date)) {
+      return Response.json(
+        { success: false, message: "ご予約は2日後以降の日付から承っております。" },
         { status: 400 }
       );
     }
