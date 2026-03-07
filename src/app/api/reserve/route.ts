@@ -262,7 +262,7 @@ export async function POST(req: Request) {
 
     const reservation = data?.[0];
 
-    // メール送信（非同期で実行、失敗しても予約は成功）
+    // メール送信（await して完了させる。Vercel ではレスポンス返却後に処理が打ち切られるため）
     if (reservation && email) {
       const emailPayload = {
         reservationId: reservation.id,
@@ -285,19 +285,14 @@ export async function POST(req: Request) {
         totalPrice: total_price || 0,
       } as const;
 
-      sendReservationConfirmationEmail(emailPayload)
-        .then((result) => {
-          if (result.success) {
-            console.log(`✅ 予約確認メール送信成功: ${reservation.id} → ${email}`);
-          } else {
-            console.error(`❌ 予約確認メール送信失敗: ${reservation.id} → ${email}`, result.error);
-          }
-        })
-        .catch((emailError) => {
-          console.error(`❌ 予約確認メール送信エラー: ${reservation.id} → ${email}`, emailError);
-        });
+      const emailResult = await sendReservationConfirmationEmail(emailPayload);
+      if (emailResult.success) {
+        console.log(`✅ 予約確認メール送信成功: ${reservation.id} → ${email}`);
+      } else {
+        console.error(`❌ 予約確認メール送信失敗: ${reservation.id} → ${email}`, emailResult.error);
+      }
 
-      // お店宛ての新規予約通知メール（失敗しても予約自体は成功扱い）
+      // お店宛ての新規予約通知メール（RESEND_SHOP_EMAIL が設定されている場合のみ）
       sendReservationCreatedNotificationEmailToShop(emailPayload).catch((shopEmailError) => {
         console.error(
           `❌ 予約作成通知メール送信エラー（管理用）: ${reservation.id} → RESEND_SHOP_EMAIL`,
