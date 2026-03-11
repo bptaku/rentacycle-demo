@@ -297,12 +297,17 @@ export async function POST(req: Request) {
       }
 
       // お店宛ての新規予約通知メール（RESEND_SHOP_EMAIL が設定されている場合のみ）
-      sendReservationCreatedNotificationEmailToShop(emailPayload).catch((shopEmailError) => {
+      // これを await しないと、Vercel のサーバーレス環境ではレスポンス返却後に処理が途中で打ち切られ、
+      // Resend に到達しない可能性があるため、明示的に await する。
+      const shopEmailResult = await sendReservationCreatedNotificationEmailToShop(emailPayload);
+      if (shopEmailResult.success) {
+        console.log(`✅ 予約作成通知メール送信成功（管理用）: ${reservation.id} → RESEND_SHOP_EMAIL`);
+      } else {
         console.error(
-          `❌ 予約作成通知メール送信エラー（管理用）: ${reservation.id} → RESEND_SHOP_EMAIL`,
-          shopEmailError
+          `❌ 予約作成通知メール送信失敗（管理用）: ${reservation.id} → RESEND_SHOP_EMAIL`,
+          shopEmailResult.error
         );
-      });
+      }
     } else if (!email) {
       console.warn(`⚠️ メールアドレスが未入力のため、予約確認メールを送信できません: ${reservation?.id}`);
     }
