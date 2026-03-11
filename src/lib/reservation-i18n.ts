@@ -204,7 +204,7 @@ const JA: ReservationTranslations = {
   step1Title: "プランを選ぶ",
   step1Desc: "ご利用予定の時間帯・日数にあわせてプランをお選びください。",
   step2Title: "日時を選ぶ",
-  step2Desc: "水曜日は定休日のため、貸出日・返却日に選択できません。",
+  step2Desc: "水曜日は定休日のため、貸出日に選択できません。返却日は水曜日でも可能です。",
   step3Title: "車種と台数を選ぶ",
   step3Desc: "空き状況を確認しながら、ご希望の台数を入力してください。",
   step4Title: "オプションと補償",
@@ -229,10 +229,10 @@ const JA: ReservationTranslations = {
   pickupTime: "来店時間",
   pickupTimeNote6h: "出発時間を選ぶと、返却時間が自動で計算されます。",
   pickupTimeNoteOther: "ご来店予定時間は目安で構いません。",
-  closedMessageSingle: "定休日（水曜）は予約できません。",
-  closedMessageBoth: "貸出日と返却日が定休日（水曜）に当たるためご利用いただけません",
+  closedMessageSingle: "貸出日が定休日（水曜）のためご利用いただけません。",
+  closedMessageBoth: "貸出日が定休日（水曜）のためご利用いただけません",
   closedMessageStart: "貸出日が定休日（水曜）に当たるためご利用いただけません",
-  closedMessageEnd: "返却日が定休日（水曜）に当たるためご利用いただけません",
+  closedMessageEnd: "返却日は水曜日でもご利用いただけます。",
   busyThreeDayNote: "※繁忙期の三連休は6時間プランの予約ができません",
   priceGuide: "料金の目安",
   price6h: "6時間",
@@ -306,8 +306,8 @@ const JA: ReservationTranslations = {
   groupDiscountLabel: "グループ割 10%OFF 適用",
   weekdayNames: "日月火水木金土",
   closedWeekday: "水曜日",
-  /** カレンダーエリア用：貸出・返却に水曜を選べない旨 */
-  calendarClosedDayNotice: "水曜日は定休日のため、貸出日・返却日に選択できません。",
+  /** カレンダーエリア用：貸出日にのみ水曜を選べない旨 */
+  calendarClosedDayNotice: "水曜日は定休日のため、貸出日に選択できません。返却日は水曜日でも可能です。",
 };
 
 const EN: ReservationTranslations = {
@@ -322,7 +322,7 @@ const EN: ReservationTranslations = {
   step1Title: "Choose a plan",
   step1Desc: "Select the plan that matches your schedule.",
   step2Title: "Select date & time",
-  step2Desc: "Wednesdays are closed; please do not select Wednesday as pick-up or return date.",
+  step2Desc: "Wednesdays are closed; please do not select Wednesday as pick-up date. Return on Wednesday is allowed.",
   step3Title: "Choose bikes",
   step3Desc: "Enter the number of bikes you need. Availability is shown in real time.",
   step4Title: "Options & insurance",
@@ -347,10 +347,10 @@ const EN: ReservationTranslations = {
   pickupTime: "Pick-up time",
   pickupTimeNote6h: "Return time is calculated automatically.",
   pickupTimeNoteOther: "Pick-up time is approximate.",
-  closedMessageSingle: "We are closed on Wednesdays.",
-  closedMessageBoth: "Pick-up and return fall on our closed day (Wednesday).",
+  closedMessageSingle: "Pick-up date is our closed day (Wednesday).",
+  closedMessageBoth: "Pick-up date is our closed day (Wednesday).",
   closedMessageStart: "Pick-up date is our closed day (Wednesday).",
-  closedMessageEnd: "Return date is our closed day (Wednesday).",
+  closedMessageEnd: "Return on Wednesday is allowed.",
   busyThreeDayNote: "6-hour plan is not available on busy 3-day weekends.",
   priceGuide: "Price guide",
   price6h: "6h",
@@ -424,7 +424,7 @@ const EN: ReservationTranslations = {
   groupDiscountLabel: "Group discount 10% off",
   weekdayNames: "SunMonTueWedThuFriSat",
   closedWeekday: "Wednesday",
-  calendarClosedDayNotice: "Wednesdays are closed; please do not select Wednesday as pick-up or return date.",
+  calendarClosedDayNotice: "Wednesdays are closed; please do not select Wednesday as pick-up date. Return on Wednesday is allowed.",
 };
 
 /** プラン詳細（id, title, subtitle, note）の言語別 */

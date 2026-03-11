@@ -606,6 +606,11 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
     Object.fromEntries(BIKE_TYPES.map((t) => [t.id, 0])) as Record<BikeType, number>
   );
 
+  const [qtyDraft, setQtyDraft] = useState<Record<BikeType, string>>(
+    Object.fromEntries(BIKE_TYPES.map((t) => [t.id, "0"])) as Record<BikeType, string>
+  );
+  const [editingQtyBikeId, setEditingQtyBikeId] = useState<BikeType | null>(null);
+
   type AddonsByBike = Partial<Record<BikeType, Array<Partial<Record<string, number>>>>>;
   const [addonsByBike, setAddonsByBike] = useState<AddonsByBike>({});
   const [maxPannierAvailable, setMaxPannierAvailable] = useState(MAX_PANNIER);
@@ -618,6 +623,17 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
     }
     setQty((prev) => ({ ...prev, [bikeId]: safeValue }));
   };
+
+  useEffect(() => {
+    if (editingQtyBikeId) return;
+    setQtyDraft((prev) => {
+      const next = { ...prev };
+      for (const { id } of BIKE_TYPES) {
+        next[id] = String(qty[id] ?? 0);
+      }
+      return next;
+    });
+  }, [qty, editingQtyBikeId]);
 
   const handleStatusChange = useCallback(
     (
@@ -734,7 +750,6 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
   const returnDate = calcReturnDate(date, plan, days);
   const returnWeekday = returnDate ? returnDate.getDay() : -1;
   const isClosed = weekday === CLOSED_DAY;
-  const isReturnClosed = returnWeekday === CLOSED_DAY;
 
   const totalBikes = useMemo(() => Object.values(qty).reduce((a, b) => a + (b || 0), 0), [qty]);
   const adultCount = useMemo(
@@ -818,7 +833,6 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
   const pannierCount = countPannier(addonsByBike);
   const isBookingDisabled =
     isClosed ||
-    isReturnClosed ||
     !plan ||
     totalBikes === 0 ||
     (plan === "6h" && isThreeDayWeekendBlocked) ||
@@ -828,23 +842,11 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
 
   const closureMessage = useMemo(() => {
     if (!plan || !date) return "";
-    if (plan === "6h" || plan === "1d") {
-      if (isClosed || isReturnClosed) {
-        return t.closedMessageSingle;
-      }
-      return "";
-    }
-    if (isClosed && isReturnClosed) {
-      return t.closedMessageBoth;
-    }
     if (isClosed) {
       return t.closedMessageStart;
     }
-    if (isReturnClosed) {
-      return t.closedMessageEnd;
-    }
     return "";
-  }, [plan, date, isClosed, isReturnClosed, t]);
+  }, [plan, date, isClosed, t]);
 
   const handleDateChange = useCallback(
     (value: string) => {
@@ -1168,13 +1170,38 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
                                 <div className={`flex flex-col gap-3 rounded-2xl border ${style.inputBorder} bg-white p-5`}>
                                   <label className="text-xs font-medium uppercase tracking-wide text-slate-500">{t.reserveCount}</label>
                                   <input
-                                    type="number"
-                                    min={0}
-                                    max={available}
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
                                     data-availability-pause
                                     className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-right text-2xl font-semibold text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                                    value={qty[bike.id as BikeType]}
-                                    onChange={(e) => setQtySafe(bike.id, Number(e.target.value), available)}
+                                    value={
+                                      editingQtyBikeId === (bike.id as BikeType)
+                                        ? (qtyDraft[bike.id as BikeType] ?? "")
+                                        : String(qty[bike.id as BikeType] ?? 0)
+                                    }
+                                    onFocus={() => setEditingQtyBikeId(bike.id as BikeType)}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      if (raw === "") {
+                                        setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: "" }));
+                                        return;
+                                      }
+                                      const digitsOnly = raw.replace(/[^\d]/g, "");
+                                      const normalized = digitsOnly.replace(/^0+(?=\d)/, "");
+                                      setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: normalized }));
+                                    }}
+                                    onBlur={() => {
+                                      const raw = qtyDraft[bike.id as BikeType] ?? "";
+                                      const parsed = raw === "" ? 0 : Number(raw);
+                                      const safe = Math.min(
+                                        Math.max(0, Number.isFinite(parsed) ? Math.floor(parsed) : 0),
+                                        Math.max(0, Math.floor(available))
+                                      );
+                                      setQtySafe(bike.id, safe, available);
+                                      setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: String(safe) }));
+                                      setEditingQtyBikeId(null);
+                                    }}
                                     disabled={available <= 0}
                                   />
                                 </div>
