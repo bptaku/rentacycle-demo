@@ -1180,7 +1180,12 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
                                         ? (qtyDraft[bike.id as BikeType] ?? "")
                                         : String(qty[bike.id as BikeType] ?? 0)
                                     }
-                                    onFocus={() => setEditingQtyBikeId(bike.id as BikeType)}
+                                    onFocus={() => {
+                                      setEditingQtyBikeId(bike.id as BikeType);
+                                      if ((qty[bike.id as BikeType] ?? 0) === 0) {
+                                        setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: "" }));
+                                      }
+                                    }}
                                     onChange={(e) => {
                                       const raw = e.target.value;
                                       if (raw === "") {
