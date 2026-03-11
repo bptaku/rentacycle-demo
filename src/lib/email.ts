@@ -366,6 +366,15 @@ export async function sendReservationCreatedNotificationEmailToShop(
   const apiKey = process.env.RESEND_API_KEY;
   const toEmail = process.env.RESEND_SHOP_EMAIL;
 
+  // ランタイムで環境変数がどう見えているかを確認するための詳細ログ
+  console.log("📧 [DEBUG] sendReservationCreatedNotificationEmailToShop env check", {
+    hasApiKey: !!apiKey,
+    toEmail,
+    fromEmail: process.env.RESEND_FROM_EMAIL,
+    nodeEnv: process.env.NODE_ENV,
+    vercelUrl: process.env.VERCEL_URL,
+  });
+
   if (!apiKey || !toEmail) {
     console.warn(
       "⚠️ RESEND_SHOP_EMAIL が未設定のため、お店への「新規予約」通知メールをスキップしました。（お客様への予約確認メールには影響しません）"
