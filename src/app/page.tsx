@@ -1192,12 +1192,18 @@ export default function RentacyclePageV5({ locale: localeProp = "ja" }: { locale
                                         setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: "" }));
                                         return;
                                       }
-                                      const digitsOnly = raw.replace(/[^\d]/g, "");
+                                      const half = raw.replace(/[０-９]/g, (c) =>
+                                        String.fromCharCode(c.charCodeAt(0) - 0xfee0)
+                                      );
+                                      const digitsOnly = half.replace(/[^\d]/g, "");
                                       const normalized = digitsOnly.replace(/^0+(?=\d)/, "");
                                       setQtyDraft((prev) => ({ ...prev, [bike.id as BikeType]: normalized }));
                                     }}
                                     onBlur={() => {
-                                      const raw = qtyDraft[bike.id as BikeType] ?? "";
+                                      let raw = qtyDraft[bike.id as BikeType] ?? "";
+                                      raw = raw.replace(/[０-９]/g, (c) =>
+                                        String.fromCharCode(c.charCodeAt(0) - 0xfee0)
+                                      );
                                       const parsed = raw === "" ? 0 : Number(raw);
                                       const safe = Math.min(
                                         Math.max(0, Number.isFinite(parsed) ? Math.floor(parsed) : 0),
